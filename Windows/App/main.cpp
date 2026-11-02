@@ -9,6 +9,7 @@
 #include "Settings.h"
 #include "Updater.h"
 #include "Emoji.h"
+#include "CrashReporter.h"
 #include "../../Engine/Vietnamese.h"
 #include "resource.h"
 
@@ -120,6 +121,8 @@ static LRESULT CALLBACK wndProc(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
 }
 
 int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, PWSTR, int) {
+    vikey::crash::install();           // a crash leaves a text report (no typed text) for the next launch
+    vikey::crash::selfTestIfAsked();   // hidden: --crash-self-test
     HANDLE single = CreateMutexW(nullptr, TRUE, L"Local\\VikeyRunning");
     if (GetLastError() == ERROR_ALREADY_EXISTS) {   // already running: opening the app again shows its window, like on macOS
         HWND t = FindWindowW(L"VikeyTray", nullptr);
@@ -144,6 +147,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, PWSTR, int) {
     if (!vikey::prefs::has(L"FirstRunDone")) vikey::ui::showSettings(inst, true);
     SetTimer(_hwnd, TIMER_FLUSH, 10000, nullptr);
     vikey::updater::start(_hwnd);
+    vikey::crash::checkAtLaunch();   // after a crash: ask to send the report (on its own thread)
     vikey::site::start(_hwnd);   // per-website memory and password fields, read off the hook thread
     MSG msg; while (GetMessageW(&msg, nullptr, 0, 0)) { TranslateMessage(&msg); DispatchMessageW(&msg); }
     ReleaseMutex(single); CloseHandle(single);
