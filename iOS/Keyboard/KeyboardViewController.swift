@@ -726,9 +726,10 @@ final class KeyboardViewController: UIInputViewController, KeyboardViewDelegate 
 
     /// Capital letter at the start of a sentence, like the system keyboard.
     /// Punctuation typed right after a space goes back onto the word: "this ." → "this.", "hello "" → "hello"".
-    /// Quotes and brackets only when they close one that is open in this paragraph.
+    /// Quotes and brackets only when they close one that is open in this paragraph. Not : or ; (Tony): they start
+    /// emoticons, "haha :)" must not become "haha:)", and "Hello : " stays as typed.
     private func snapsBack(_ c: String) -> Bool {
-        guard ".,?!:;)\"".contains(c), let before = lastContext, before.hasSuffix(" ") else { return false }
+        guard ".,?!)\"".contains(c), let before = lastContext, before.hasSuffix(" ") else { return false }
         let prev = before.dropLast().last
         guard let p = prev, p != " ", p != "\n" else { return false }
         let para = before.split(separator: "\n", omittingEmptySubsequences: false).last ?? ""

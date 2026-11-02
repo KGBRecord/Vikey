@@ -47,6 +47,11 @@ final class KeyboardSystemParityTests: XCTestCase {
     func testNoCapitalAfterComma() { let (vc, p) = make(); type("hi, there ", vc); XCTAssertEqual(p.text, "Hi, there ") }
 
     // punctuation typed after a space moves back onto the word
+    func testColonAndSemicolonStay() {   // emoticons (Tony): "haha :)" stays, "Hello : " stays
+        for (keys, want) in [("haha :) ", "Haha :) "), ("hello : ", "Hello : "), ("ok ;) ", "Ok ;) ")] {
+            let (vc, p) = make(); type(keys, vc); XCTAssertEqual(p.text, want, keys)
+        }
+    }
     func testPeriodSnapsBack() { let (vc, p) = make(); type("this . ", vc); XCTAssertEqual(p.text, "This. ") }
     func testCommaSnapsBack() { let (vc, p) = make(); type("this , that ", vc); XCTAssertEqual(p.text, "This, that ") }
     func testQuestionAndExclamation() { let (vc, p) = make(); type("really ? yes ! ", vc); XCTAssertEqual(p.text, "Really? Yes! ") }

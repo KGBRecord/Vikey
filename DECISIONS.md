@@ -5,6 +5,16 @@ Each entry records what was asked, what was decided, and its status. Newest firs
 
 Status values: **Shipped** (in a build Tony has), **Agreed** (decided, not built yet), **Rejected**.
 
+## 59. ":" and ";" after a space stay where they are (phone keyboards)
+
+**Status:** Shipped 2026-11-02 (Tony changed his mind on the earlier behavior).
+
+**Problem.** On iPhone and Android, punctuation typed right after a space went back onto the word, like the system keyboard: "Hello : " gave "Hello: ", and the emoticon "haha :)" gave "haha:)".
+
+**Fix.** Only . , ? ! and closing ) " still snap back ("this ." → "this."). : and ; stay as typed, so emoticons (:) :D ;)) and "Hello : " keep their space. Desktop typing never had this behavior.
+
+**Result.** iOS test `testColonAndSemicolonStay` ("haha :) ", "hello : ", "ok ;) "); `testPeriodSnapsBack` still passes.
+
 ## 58. "docs" in Vietnamese mode is English
 
 **Status:** Shipped 2026-11-02 (bug from an X user, via Tony).

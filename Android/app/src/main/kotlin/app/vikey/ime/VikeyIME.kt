@@ -583,9 +583,10 @@ class VikeyIME : InputMethodService(), KeyboardView.Listener, EmojiKeyboardView.
     private val smartDashesHere: Boolean get() = correctsHere
 
     /** Punctuation typed right after a space goes back onto the word: "this ." → "this.", "hello "" → "hello"".
-     *  Quotes and brackets only when they close one that is open in this paragraph. */
+     *  Quotes and brackets only when they close one that is open in this paragraph. Not : or ; (Tony): they start
+     *  emoticons, "haha :)" must not become "haha:)", and "Hello : " stays as typed. */
     private fun snapsBack(c: String): Boolean {
-        if (c.length != 1 || c[0] !in ".,?!:;)\"") return false
+        if (c.length != 1 || c[0] !in ".,?!)\"") return false
         val before = lastContext ?: return false
         if (!before.endsWith(" ") || before.length < 2) return false
         val p = before[before.length - 2]
