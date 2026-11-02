@@ -7,6 +7,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // before anything else: no event tap, no windows, no focus taken (it runs while others use the Mac)
         if let dir = UserDefaults.standard.string(forKey: "emojiSelfTest") { EmojiSelfTest.run(dir: dir); return }
         if let dir = UserDefaults.standard.string(forKey: "renderMainWindow") { MainWindowProposals.run(dir: dir); return }
+        if UserDefaults.standard.bool(forKey: "crashSelfTest") { fatalError("Vikey crash self-test") }   // -crashSelfTest YES
         #endif
         Migration.fromOpenKeyIfNeeded()
         // people who already use Vikey (permission granted) don't get the first-run guide on update
@@ -16,6 +17,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         AppState.shared.startIfPossible()
         _ = Updater.shared                     // starts Sparkle: daily update checks
         EmojiPicker.shared.install()
+        CrashReporter.checkAtLaunch()          // after a crash: ask to send the report (never typed text)
         if UserDefaults.standard.bool(forKey: "showOnboarding") { OnboardingWindow.show() }   // -showOnboarding YES (screenshots)
         if UserDefaults.standard.bool(forKey: "showAbout") { AboutPanel.show() }             // -showAbout YES (screenshots)
         if UserDefaults.standard.bool(forKey: "showMain") { Windows.main.show() }           // -showMain YES (screenshots)
