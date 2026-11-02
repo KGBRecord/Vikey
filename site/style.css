@@ -408,3 +408,7 @@ h1 span{white-space:nowrap}
 .sw-w i{font-style:normal;font-size:10px;font-weight:700;letter-spacing:.05em;color:#8a92a3;background:#e8ebf2;border-radius:4px;padding:1px 5px}
 .sw-w .c.en{background:var(--chip)}.sw-w .c.en b{color:var(--blue)}.sw-w .c.en i{background:var(--blue);color:#fff}
 @media(prefers-reduced-motion:reduce){.sw-w .c{animation:none}}
+.fbfiles .lbl{font-weight:600;font-size:14px}.fbfiles .drop{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;padding:14px;border:1px dashed var(--line);border-radius:9px;background:var(--bg2)}
+.fbfiles .drop.over{border-color:var(--blue);background:var(--chip)}.fbfiles .addf{padding:8px 14px;font-size:14px;cursor:pointer}.fbfiles .addf input{position:absolute;width:1px;height:1px;opacity:0}
+.fbfiles .flist{list-style:none;margin:6px 0 0;padding:0;display:grid;gap:6px}.fbfiles .flist li{display:flex;align-items:center;gap:10px;font-size:14px;padding:8px 12px;border:1px solid var(--line);border-radius:8px;background:#fff}
+.fbfiles .flist .n{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.fbfiles .flist .s{color:var(--muted);font-size:13px}.fbfiles .flist button{border:0;background:none;color:var(--muted);font-size:18px;line-height:1;cursor:pointer;padding:0 2px}
