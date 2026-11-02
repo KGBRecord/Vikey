@@ -29,6 +29,8 @@ struct MainView: View {
                         Image("Logo").resizable().frame(width: 40, height: 40)
                             .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
                         Wordmark(size: 32)
+                        Spacer()
+                        feedbackButton
                     }
                     .listRowBackground(Color.clear)
                     .listRowInsets(EdgeInsets(top: 4, leading: 4, bottom: 0, trailing: 0))
@@ -114,6 +116,18 @@ struct MainView: View {
 }
 
 extension MainView {
+    /// Send feedback, top right of the header (Tony picked the capsule with text).
+    var feedbackButton: some View {
+        Link(destination: Self.feedbackURL) {
+            Label("Góp ý", systemImage: "bubble.left.and.text.bubble.right")
+                .font(.subheadline.weight(.semibold))
+                .padding(.horizontal, 12).padding(.vertical, 7)
+                .background(Capsule().fill(Color.brand.opacity(0.12)))
+        }
+        .foregroundStyle(Color.brand)
+        .accessibilityLabel("Gửi góp ý")
+    }
+
     /// vikey.app/feedback (English page when the app is in English) with the platform and version.
     static var feedbackURL: URL {
         let v = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? ""

@@ -1200,6 +1200,16 @@
           }
         }
       }
+    },
+    "Góp ý": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Feedback"
+          }
+        }
+      }
     }
   },
   "version": "1.0"
