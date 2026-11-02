@@ -19,7 +19,7 @@ final class EmojiPicker {
     /// At launch: the hotkey handler, and the panel built ahead of time so it opens instantly.
     func install() {
         VikeyCore.setEmojiHotkeyHandler { [weak self] in self?.toggle() }
-        DispatchQueue.global(qos: .userInitiated).async { _ = EmojiIndex.shared }
+        DispatchQueue.global(qos: .userInitiated).async { EmojiIndex.shared.prepareSearch() }   // the Mac panel opens on a search box
         DispatchQueue.main.async { if UserDefaults.standard.integer(forKey: PrefEmoji.enabled) != 0 { self.prepare() } }
     }
 
