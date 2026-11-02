@@ -114,6 +114,12 @@ final class KeyboardViewController: UIInputViewController, KeyboardViewDelegate 
         super.viewWillAppear(animated)
         setAI(.none); selection = nil
         AIAssist.refresh()   // off the main thread: whether the model is there
+        keyboard.animatesLanguage = false   // the pill takes the saved language without rolling while the keyboard comes up
+        comingUp = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+            guard let self, self.comingUp else { return }
+            self.comingUp = false; self.setContentVisible(true)
+        }
         keyboard.resetTouches()   // a touch cut off when the keyboard last went away must not hold on to a key
         if let ev = emojiView, !ev.isHidden { emojiKeyboardClose(ev) }   // a new field opens on the letters
         if KeyboardView.searchTop != nil, emojiView?.searching != true {     // static: it outlives a closed keyboard
@@ -151,6 +157,21 @@ final class KeyboardViewController: UIInputViewController, KeyboardViewDelegate 
             + (browsingEmoji ? EmojiKeyboardView.extraHeight : 0)
         keyboard?.setNeedsLayout()
         if previous?.userInterfaceStyle != traitCollection.userInterfaceStyle { refresh() }
+    }
+
+    /// iOS can show the keyboard for a frame or two at its own, taller height before ours applies (Tony saw the keys
+    /// at the top of a tall, half-empty keyboard): until the view has our height, its content stays invisible.
+    /// Only while the keyboard comes up, and never longer than 0.3 s (a host that keeps another height still gets keys).
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        guard comingUp, let h = heightConstraint?.constant else { return }
+        setContentVisible(abs(view.bounds.height - h) <= 2)
+    }
+    private var comingUp = false
+    private func setContentVisible(_ on: Bool) {
+        let alpha: CGFloat = on ? 1 : 0
+        if keyboard.alpha != alpha { keyboard.alpha = alpha }
+        if let ev = emojiView, ev.alpha != alpha { ev.alpha = alpha }
     }
 
     override func viewWillLayoutSubviews() {
@@ -259,6 +280,8 @@ final class KeyboardViewController: UIInputViewController, KeyboardViewDelegate 
 
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
+        keyboard.animatesLanguage = true
+        comingUp = false; setContentVisible(true)
         readSelection()   // opened onto text that's already selected
     }
 

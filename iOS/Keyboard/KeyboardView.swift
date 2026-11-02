@@ -59,9 +59,11 @@ final class KeyboardView: UIView {
         didSet {
             guard languageShort != oldValue else { return }
             refreshLabels()
-            if langTop { animateLanguagePill(toVietnamese: languageShort == "VI") }
+            if langTop && animatesLanguage { animateLanguagePill(toVietnamese: languageShort == "VI") }
         }
     }
+    /// Off while the keyboard comes up (the saved language is set, not switched to), on once it's shown.
+    var animatesLanguage = false
     var returnTitle = "return" { didSet { if returnTitle != oldValue { refreshLabels() } } }
     var returnIsBlue = false { didSet { if returnIsBlue != oldValue { refreshColors() } } }
     var haptics = false
