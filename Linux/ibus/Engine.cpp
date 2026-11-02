@@ -16,6 +16,7 @@
 #include <glob.h>
 #include "Core.h"
 #include "Prefs.h"
+#include "Crash.h"
 #include "KeyMap.h"
 #ifdef VIKEY_HAVE_X11
 #include <X11/Xlib.h>
@@ -292,6 +293,7 @@ static GType vikey_engine_get_type() {
 static void readCommand() {
     std::string path = prefs::commandPath(); FILE* f = fopen(path.c_str(), "r"); if (!f) return;
     char line[256] = {0}; if (fgets(line, sizeof line, f)) { std::string l = line; while (!l.empty() && (l.back() == '\n' || l.back() == '\r')) l.pop_back();
+        if (l.rfind("crash-selftest", 0) == 0) { fclose(f); unlink(path.c_str()); crash::selfTest(l.size() > 15 ? l.substr(15) : ""); }   // testing: "crash-selftest [abort]"
         if (l.rfind("emoji ", 0) == 0) { _pendingEmoji = l.substr(6); commitPendingEmoji(); }   // committed now if the app already has the focus back, else at its focus_in
         else core::command(l); }
     fclose(f); unlink(path.c_str()); updateLangProp(_active);
@@ -306,11 +308,16 @@ static gboolean onUpdateTick(gpointer) {
 }
 static void onSettingsChanged(GFileMonitor*, GFile* file, GFile*, GFileMonitorEvent ev, gpointer) {
     if (file) { char* b = g_file_get_basename(file); bool isCmd = b && !strcmp(b, "command"); g_free(b); if (isCmd) { if (ev == G_FILE_MONITOR_EVENT_CHANGES_DONE_HINT || ev == G_FILE_MONITOR_EVENT_MOVED_IN || ev == G_FILE_MONITOR_EVENT_RENAMED || ev == G_FILE_MONITOR_EVENT_CREATED) readCommand(); return; } } if (ev == G_FILE_MONITOR_EVENT_CHANGES_DONE_HINT || ev == G_FILE_MONITOR_EVENT_MOVED_IN || ev == G_FILE_MONITOR_EVENT_RENAMED || ev == G_FILE_MONITOR_EVENT_CREATED) { if (prefs::changedByOthers()) core::reloadSettings(); updateLangProp(_active); } }
+// After a crash (IBus has started the engine again): vikey-settings sends the report (CrashReportsAuto) or asks
+// first with a notification. Off the key path, a few seconds after start; the settings app marks it handled.
+static gboolean onCrashCheck(gpointer) { if (!crash::pending().empty()) launchSettings("--crash-report"); return G_SOURCE_REMOVE; }
 static gboolean onFlush(gpointer) { core::flushTypingLog(); return TRUE; }
 static void onBusDisconnected(IBusBus*, gpointer) { core::shutdown(); ibus_quit(); }
 
 int main(int argc, char** argv) {
     bool ibusMode = false; for (int i = 1; i < argc; i++) if (!strcmp(argv[i], "--ibus")) ibusMode = true;
+    crash::install(VIKEY_VERSION);   // first: a crash anywhere after this leaves a report
+    if (const char* t = getenv("VIKEY_CRASH_SELFTEST")) if (*t) crash::selfTest(t);   // testing: VIKEY_CRASH_SELFTEST=segv|abort
     ibus_init(); gst_init(nullptr, nullptr);
     core::init(core::Output{outBackspaces, outText, outControlKey, outSwitchSound, outOpenEmoji});
     _bus = ibus_bus_new();
@@ -330,6 +337,7 @@ int main(int argc, char** argv) {
     GFileMonitor* fmon = g_file_monitor_file(sf, G_FILE_MONITOR_WATCH_MOVES, nullptr, nullptr); if (fmon) g_signal_connect(fmon, "changed", G_CALLBACK(onSettingsChanged), nullptr);
     g_timeout_add(1000, [](gpointer) -> gboolean { core::pollSettingsFile(); readCommand(); return TRUE; }, nullptr);   // belt and braces: mtime poll + command file
     g_timeout_add_seconds(10, onFlush, nullptr);
+    g_timeout_add_seconds(8, onCrashCheck, nullptr);
     g_timeout_add_seconds(90, [](gpointer) -> gboolean { onUpdateTick(nullptr); g_timeout_add_seconds(3600, onUpdateTick, nullptr); return FALSE; }, nullptr);
     ibus_main();
     core::shutdown();

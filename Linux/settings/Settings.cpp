@@ -1,7 +1,8 @@
 // vikey-settings: the Vikey window on Linux (GTK4 + libadwaita), 1:1 with the Mac app's MainView:
 // header (icon, Vikey, hotkey hint, Tiếng Việt / English), grouped rows with switches and (?) tips.
 // Also: the typing-log window (--log), About (--about) with Ghi nhận (--acknowledgements), the first-run guide
-// (--guide, Guide.cpp), the emoji picker (--emoji, Emoji.cpp) and the update check (--check-update [--quiet]).
+// (--guide, Guide.cpp), the emoji picker (--emoji, Emoji.cpp), the update check (--check-update [--quiet]) and the
+// crash report question (--crash-report [--dialog], CrashReport.cpp).
 // Settings live in ~/.config/vikey/settings.json; the IBus engine watches that file.
 #include "Common.h"
 #include <vector>
@@ -217,6 +218,7 @@ void buildMain(GtkApplication* app) {
     _loginSw = gtk_switch_new(); gtk_widget_set_valign(_loginSw, GTK_ALIGN_CENTER); gtk_widget_set_sensitive(_loginSw, FALSE);
     GtkWidget* lr = row(g5, "Mở Vikey khi đăng nhập", "IBus tự mở Vikey mỗi khi bạn đăng nhập, khi Vikey có trong Cài đặt › Bàn phím › Nguồn nhập."); adw_action_row_add_suffix(ADW_ACTION_ROW(lr), _loginSw);
     switchRow(g5, "Tự động cập nhật", "Mỗi ngày Vikey kiểm tra bản mới trên vikey.app và báo cho bạn khi có. Bản mới cài bằng gói .deb/.rpm từ vikey.app.", "AutoUpdate", 1);
+    switchRow(g5, "Tự gửi báo cáo lỗi", "Khi Vikey bị thoát đột ngột, tự gửi báo cáo lỗi lần mở sau mà không hỏi. Báo cáo chỉ có thông tin kỹ thuật: vị trí lỗi trong mã, phiên bản Vikey và Linux. Không có chữ bạn đã gõ.", "CrashReportsAuto", 0);
     // send feedback (main, 1.0.25): opens vikey.app/feedback in the browser, with the platform and version
     GtkWidget* fb = row(g5, "Góp ý", "Báo lỗi hoặc góp ý cho Vikey: mở trang vikey.app/feedback trong trình duyệt.");   // same row as the Mac's
     GtkWidget* fbBtn = gtk_button_new_with_label("Gửi góp ý…"); gtk_widget_set_valign(fbBtn, GTK_ALIGN_CENTER);
@@ -402,7 +404,7 @@ void checkUpdate(GtkApplication* app, bool quiet) {
 }
 
 // ---- entry ------------------------------------------------------------------------------------------------------
-static std::string _mode; static bool _quiet = false;
+static std::string _mode; static bool _quiet = false, _dialog = false;
 static void onActivate(GtkApplication* app, gpointer) {
     loadCss();
     if (_mode == "--log") buildLog(app);
@@ -411,11 +413,12 @@ static void onActivate(GtkApplication* app, gpointer) {
     else if (_mode == "--guide") buildGuide(app, false);
     else if (_mode == "--emoji") buildEmoji(app);
     else if (_mode == "--check-update") checkUpdate(app, _quiet);
+    else if (_mode == "--crash-report") crashReport(app, _dialog);
     else if (!prefs::getInt("OnboardingDone", 0)) buildGuide(app, true);   // first run: the guide, then this window
     else buildMain(app);
 }
 int main(int argc, char** argv) {
-    for (int i = 1; i < argc; i++) { if (!strcmp(argv[i], "--quiet")) _quiet = true; else if (!strncmp(argv[i], "--", 2)) _mode = argv[i]; }
+    for (int i = 1; i < argc; i++) { if (!strcmp(argv[i], "--quiet")) _quiet = true; else if (!strcmp(argv[i], "--dialog")) _dialog = true; else if (!strncmp(argv[i], "--", 2)) _mode = argv[i]; }
     AdwApplication* app = adw_application_new(_mode == "--emoji" ? "app.vikey.Emoji" : "app.vikey.Settings", G_APPLICATION_NON_UNIQUE);
     g_signal_connect(app, "activate", G_CALLBACK(onActivate), nullptr);
     return g_application_run(G_APPLICATION(app), 0, nullptr);
