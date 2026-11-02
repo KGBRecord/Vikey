@@ -99,9 +99,12 @@ final class KeyboardViewController: UIInputViewController, KeyboardViewDelegate 
         KeyboardView.barOn = d.bool(forKey: VKSettings.Key.suggestions) || d.bool(forKey: VKSettings.Key.autoCorrect)
         Diag.on = d.bool(forKey: VKSettings.Key.diagnostics)   // its readout line adds height too
         let h = view.heightAnchor.constraint(equalToConstant: KeyboardView.keyboardHeight(compactHeight: traitCollection.verticalSizeClass == .compact))
-        h.priority = .defaultHigh
+        // 999, and the input view sizes itself from it: at .defaultHigh iOS showed its own, much taller height for a
+        // frame before ours (Tony, builds 40-45; before 40 a slow main-thread check at appear happened to hide it)
+        h.priority = UILayoutPriority(999)
         h.isActive = true
         heightConstraint = h
+        (view as? UIInputView)?.allowsSelfSizing = true
         let saved = UserDefaults.standard.object(forKey: languageKey) as? Int ?? 1
         driver.language = saved
         // the emoji index is built when the emoji keyboard first opens, not here: at launch it pushed the keyboard
