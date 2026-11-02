@@ -59,7 +59,8 @@ final class KeyboardView: UIView {
         didSet {
             guard languageShort != oldValue else { return }
             refreshLabels()
-            if langTop && animatesLanguage { animateLanguagePill(toVietnamese: languageShort == "VI") }
+            if Self.markOn { mark.setLanguage(vietnamese: languageShort == "VI", animated: animatesLanguage) }
+            else if langTop && animatesLanguage { animateLanguagePill(toVietnamese: languageShort == "VI") }
         }
     }
     /// Off while the keyboard comes up (the saved language is set, not switched to), on once it's shown.
@@ -105,6 +106,12 @@ final class KeyboardView: UIView {
     static var langStyle = 1   // Tony picked the pill (A); the bottom row is the fallback when the strip is off
     private var langTop: Bool { Self.langStyle > 0 && Self.barOn && Self.searchTop == nil && layer_ != .numpad }
     private var langTopWidth: CGFloat { [0, 50, 96, 70][min(Self.langStyle, 3)] }
+    /// The corner element: VI/EN switch and Vikey mark in one (LangMark.swift, Tony picked design A). Off = the plain
+    /// pill and the strip's brand on the right (kept for the render tests of the old proposals).
+    static var markOn = true
+    let mark = LangMarkView()
+    /// The keyboard is up: the mark plays its opening.
+    func playMarkIntro() { if Self.markOn && langTop { mark.playIntro() } }
     static let pillH: CGFloat = 38
     static let barH: CGFloat = 44
     /// The corner of the glass iOS puts the keyboard in (measured, iOS 26.5: 80 px at 3x). Anything in a corner
@@ -193,6 +200,7 @@ final class KeyboardView: UIView {
         addSubview(bar)
         bar.onPick = { [unowned self] i in self.delegate?.keyboard(self, pickSuggestion: i) }
         bar.onBrand = { [unowned self] in self.openVikeyApp() }
+        addSubview(mark)
         addSubview(popup); popup.isHidden = true
         addSubview(alternates); alternates.isHidden = true
         setFonts()
@@ -287,6 +295,14 @@ final class KeyboardView: UIView {
         let barX = side + (langTop ? langTopWidth + 8 : 0)
         let barY = langTop ? dh + side + Self.pillH / 2 - (Self.barH - 4) / 2 : dh + 2   // centred on the pill
         bar.frame = CGRect(x: barX, y: barY, width: W - side - barX, height: Self.barH - 4)
+        bar.showsBrand = !Self.markOn
+        mark.isHidden = !(Self.markOn && langTop)
+        if !mark.isHidden {
+            mark.frame = CGRect(x: side, y: dh + side, width: W - 2 * side, height: Self.pillH)
+            mark.pillWidth = langTopWidth
+            mark.dark = dark
+            mark.setLanguage(vietnamese: languageShort == "VI", animated: false)
+        }
         letterRects = []; letterCaps = [:]
         for i in keys.indices where i < frames.count {
             keys[i].def.frame = frames[i]
@@ -361,6 +377,7 @@ final class KeyboardView: UIView {
 
     /// The proposals for a VI/EN key in the strip's corner.
     private func styleTopLanguage(_ v: KeyCap) {
+        if Self.markOn { v.label.attributedText = nil; v.label.text = nil; v.icon.image = nil; v.layer.shadowOpacity = 0; return }
         let brand = dark ? UIColor(red: 0.62, green: 0.60, blue: 1, alpha: 1) : UIColor(red: 0.31, green: 0.27, blue: 0.90, alpha: 1)
         v.layer.cornerRadius = Self.pillH / 2   // = hostCorner − the inset, give or take a point
         v.layer.cornerCurve = .continuous
@@ -384,6 +401,7 @@ final class KeyboardView: UIView {
 
     private func refreshColors() {
         bar.dark = dark
+        mark.dark = dark
         let fg: UIColor = dark ? .white : .black
         // the system keys over the keyboard's glass, measured: light (253,255,255) on (217,221,233) ≈ 95% white,
         // dark (61,61,67) on (23,24,31) ≈ 16.5% white (Tony: ours were too transparent)
@@ -396,6 +414,7 @@ final class KeyboardView: UIView {
             if def.kind == .language && langTop && languageShort == "VI" {   // tinted in Vietnamese, neutral in English
                 bg = dark ? UIColor(red: 0.42, green: 0.40, blue: 1, alpha: 0.30) : UIColor(red: 0.31, green: 0.27, blue: 0.90, alpha: 0.14)
             }
+            if def.kind == .language && langTop && Self.markOn { bg = UIColor.black.withAlphaComponent(0.001) }
             if def.kind == .language { tint = dark ? UIColor(red: 0.62, green: 0.60, blue: 1, alpha: 1) : UIColor(red: 0.31, green: 0.27, blue: 0.90, alpha: 1) }
             if cursorMode { bg = dark ? UIColor(white: 0.32, alpha: 1) : UIColor(white: 0.93, alpha: 1) }
             v.normalColor = bg
@@ -779,6 +798,7 @@ final class SuggestionBar: UIView {
     private var items: [Suggestion] = []
     /// The brand on the right of an empty strip (Tony): the icon and the wordmark, as in the Mac emoji panel.
     private let mark = UIView()
+    var showsBrand = true { didSet { if showsBrand != oldValue { restyle() } } }
     private let markIcon = UILabel()
     private let markText = UILabel()
 
@@ -825,7 +845,7 @@ final class SuggestionBar: UIView {
         let word = NSMutableAttributedString(string: "Vi", attributes: [.font: UIFont.systemFont(ofSize: 15, weight: .bold), .foregroundColor: fg])
         word.append(NSAttributedString(string: "key", attributes: [.font: UIFont.systemFont(ofSize: 15, weight: .bold), .foregroundColor: indigo]))
         markText.attributedText = word
-        mark.isHidden = !items.isEmpty   // only on an empty strip
+        mark.isHidden = !items.isEmpty || !showsBrand   // only on an empty strip
         for (i, b) in cells.enumerated() {
             let it = i < items.count ? items[i] : nil
             let title: String? = it.map {

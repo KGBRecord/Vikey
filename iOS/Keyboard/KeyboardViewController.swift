@@ -285,6 +285,7 @@ final class KeyboardViewController: UIInputViewController, KeyboardViewDelegate 
         super.viewDidAppear(animated)
         keyboard.animatesLanguage = true
         comingUp = false; setContentVisible(true)
+        keyboard.playMarkIntro()
         readSelection()   // opened onto text that's already selected
     }
 

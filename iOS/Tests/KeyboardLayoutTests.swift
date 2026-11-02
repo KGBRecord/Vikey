@@ -60,7 +60,10 @@ final class LanguageKeyProposalTests: XCTestCase {
             let img = UIGraphicsImageRenderer(bounds: kb.bounds).image { ctx in kb.layer.render(in: ctx.cgContext) }
             try? img.pngData()?.write(to: URL(fileURLWithPath: "/tmp/claude-501/layouts/pill_\(lang).png"))
             let caps = kb.subviews.compactMap { $0 as? KeyCap }
-            XCTAssertTrue(caps.contains { $0.frame.minY < 40 && ($0.label.attributedText?.string == lang) }, "the pill sits in the strip's corner")
+            // the language key stays in the corner (it takes the taps); the corner element draws VI/EN over it
+            XCTAssertTrue(caps.contains { $0.frame.minY < 40 && $0.frame.minX < 20 }, "the pill sits in the strip's corner")
+            XCTAssertFalse(kb.mark.isHidden)
+            XCTAssertEqual(kb.mark.vietnamese, lang == "VI")
         }
         KeyboardView.barOn = false
         let kb = KeyboardView(frame: CGRect(x: 0, y: 0, width: 402, height: KeyboardView.keyboardHeight(compactHeight: false)))
