@@ -92,6 +92,12 @@ final class KeyboardViewController: UIInputViewController, KeyboardViewDelegate 
             keyboard.topAnchor.constraint(equalTo: view.topAnchor),
             keyboard.bottomAnchor.constraint(equalTo: view.bottomAnchor),
         ])
+        // the strip's setting decides the height: read it before the first layout, so iOS gets the final height
+        // from the start (read later, in viewWillAppear, the height changed mid-way up: a frame of a tall, empty keyboard)
+        let d = VKSettings.defaults
+        VKSettings.register()
+        KeyboardView.barOn = d.bool(forKey: VKSettings.Key.suggestions) || d.bool(forKey: VKSettings.Key.autoCorrect)
+        Diag.on = d.bool(forKey: VKSettings.Key.diagnostics)   // its readout line adds height too
         let h = view.heightAnchor.constraint(equalToConstant: KeyboardView.keyboardHeight(compactHeight: traitCollection.verticalSizeClass == .compact))
         h.priority = .defaultHigh
         h.isActive = true
