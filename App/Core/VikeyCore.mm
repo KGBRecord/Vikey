@@ -464,7 +464,10 @@ extern "C" {
     static BOOL ScanForSpotlight() {
         NSArray *windows = CFBridgingRelease(CGWindowListCopyWindowInfo(kCGWindowListOptionOnScreenOnly | kCGWindowListExcludeDesktopElements,
                                                                         kCGNullWindowID));
+        // The Spotlight icon in the menu bar (macOS 15) is a Spotlight-owned window too: skip status items
+        NSInteger statusLevel = CGWindowLevelForKey(kCGStatusWindowLevelKey);
         for (NSDictionary *window in windows) {
+            if ([[window objectForKey:(__bridge NSString *)kCGWindowLayer] integerValue] == statusLevel) continue;
             if ([[window objectForKey:(__bridge NSString *)kCGWindowOwnerName] isEqualToString:@"Spotlight"]) {
                 return true;
             }
