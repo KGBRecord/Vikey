@@ -18,7 +18,8 @@ final class LangMarkView: UIView {
     private let indigo = UIColor(red: 0.310, green: 0.275, blue: 0.898, alpha: 1)
     private var ink: UIColor { dark ? .white : .black }
     private var keyFill: UIColor { dark ? UIColor(white: 1, alpha: 0.165) : UIColor(red: 0.992, green: 1, blue: 1, alpha: 0.99) }
-    private var tint: UIColor { dark ? UIColor(red: 0.42, green: 0.40, blue: 1, alpha: 0.30) : UIColor(red: 0.31, green: 0.27, blue: 0.90, alpha: 0.14) }
+    /// VI and EN look the same (Tony): a key-coloured capsule, the language in brand indigo.
+    private var tint: UIColor { keyFill }
 
     private let capsule = UIView()
     private let langLabel = UILabel()
@@ -51,6 +52,14 @@ final class LangMarkView: UIView {
         if !animated || introRunning { if !introRunning { settle() }; return }
         holdUntil = CACurrentMediaTime() + 1.5
         morphSwitch()
+    }
+
+    /// A finger on the corner: the capsule dims a little, like a key being pressed.
+    func pressed() {
+        guard !introRunning else { return }
+        UIView.animate(withDuration: 0.08) { self.capsule.alpha = 0.6 } completion: { _ in
+            UIView.animate(withDuration: 0.25) { self.capsule.alpha = 1 }
+        }
     }
 
     /// The keyboard came up: the mark has its moment, then becomes the language switch.

@@ -422,7 +422,11 @@ final class KeyboardView: UIView {
             if def.kind == .language && langTop && languageShort == "VI" {   // tinted in Vietnamese, neutral in English
                 bg = dark ? UIColor(red: 0.42, green: 0.40, blue: 1, alpha: 0.30) : UIColor(red: 0.31, green: 0.27, blue: 0.90, alpha: 0.14)
             }
-            if def.kind == .language && langTop && Self.markOn { bg = UIColor.black.withAlphaComponent(0.001) }
+            if def.kind == .language && langTop && Self.markOn {   // the corner element draws it (LangMark.swift), the key stays a tap area
+                v.normalColor = .clear; v.pressedColor = .clear
+                if v.backgroundColor != .clear { v.backgroundColor = .clear }
+                continue
+            }
             if def.kind == .language { tint = dark ? UIColor(red: 0.62, green: 0.60, blue: 1, alpha: 1) : UIColor(red: 0.31, green: 0.27, blue: 0.90, alpha: 1) }
             if cursorMode { bg = dark ? UIColor(white: 0.32, alpha: 1) : UIColor(white: 0.93, alpha: 1) }
             v.normalColor = bg
@@ -466,6 +470,7 @@ final class KeyboardView: UIView {
     /// skipped, or a backlog of touches would buzz two or three times in a row.
     private func press(_ c: KeyCap, late: Bool = false) {
         c.backgroundColor = c.pressedColor
+        if Self.markOn && langTop, keys.first(where: { $0.view === c })?.def.kind == .language { mark.pressed() }
         if late { Diag.late += 1; return }
         if haptics { tick() } else { UIDevice.current.playInputClick() }
     }
