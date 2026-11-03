@@ -2,7 +2,7 @@
 // types each case's keys with SendInput (as a user would; Vikey's hooks see them), and compares
 // the text that ends up in the control with the expected text. Cases: cases.tsv (name<TAB>start
 // language vi|en<TAB>keys<TAB>expected). Keys: letters, digits, space, punctuation as typed;
-// \b Backspace, \n Enter, \t Tab, {alt+z} hotkey (default), {home} {end} {num0}..{num9} {add} named keys. Exit code = number of failures.
+// \b Backspace, \n Enter, \t Tab, {alt+z} hotkey (default), {home} {end} {num0}..{num9} {add} {caps} named keys. Exit code = number of failures.
 #include <windows.h>
 #include <string>
 #include <vector>
@@ -35,6 +35,7 @@ static void typeKeys(const std::wstring& s) {
             else if (cmd == L"home") key(VK_HOME);
             else if (cmd == L"end") key(VK_END);
             else if (cmd == L"add") key(VK_ADD);
+            else if (cmd == L"caps") key(VK_CAPITAL);   // toggles Caps Lock: a case turns it off again
             else if (cmd.size() == 4 && cmd.compare(0, 3, L"num") == 0 && cmd[3] >= L'0' && cmd[3] <= L'9') key((WORD)(VK_NUMPAD0 + (cmd[3] - L'0')));
             continue; }
         SHORT v = VkKeyScanW(c);

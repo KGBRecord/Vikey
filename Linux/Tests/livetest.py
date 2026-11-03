@@ -52,7 +52,7 @@ class App(Gtk.Application):
                     while GLib.MainContext.default().iteration(False): pass   # the keys typed so far reach the engine first
                     time.sleep(0.3)
                     e = keys.index('}', i); open(CMD + '.tmp', 'w').write(keys[i+5:e] + '\n'); os.replace(CMD + '.tmp', CMD); time.sleep(0.6); i = e + 1; continue
-                if c == '{': e = keys.index('}', i); cmd = keys[i+1:e]; xdo('key', '--clearmodifiers', cmd.replace('alt+z', 'alt+z')); time.sleep(0.3); i = e + 1; continue
+                if c == '{': e = keys.index('}', i); cmd = {'caps': 'Caps_Lock'}.get(keys[i+1:e], keys[i+1:e]); xdo('key', *([] if cmd == 'Caps_Lock' else ['--clearmodifiers']), cmd); time.sleep(0.3); i = e + 1; continue   # --clearmodifiers would toggle Caps Lock back
                 if c == ' ': xdo('key', 'space')
                 else: xdo('type', '--delay', '25', c)
                 i += 1
