@@ -34,6 +34,7 @@ class VikeyIME : InputMethodService(), KeyboardView.Listener, EmojiKeyboardView.
     /** Our own copy of the text before the cursor, kept up to date from our edits (asking the app is an IPC). */
     private var lastContext: String? = null
     private var cursorPos = -1                      // where we think the cursor is (UTF-16 units)
+    private var selLength = 0                       // characters selected after the cursor
     private val recentContexts = ArrayList<String>()
     private var lastShiftTap = 0.0
     private var lastSpace = 0.0
@@ -215,6 +216,7 @@ class VikeyIME : InputMethodService(), KeyboardView.Listener, EmojiKeyboardView.
         } else fieldLanguage?.let { driver.language = it; fieldLanguage = null }
         readContext()
         cursorPos = if (info.initialSelStart >= 0) info.initialSelStart else -1
+        selLength = maxOf(0, info.initialSelEnd - info.initialSelStart)
         recentPositions.clear()   // the last field's positions mean nothing here
         clearWord()
         updateAutoShift(lastContext ?: "")
@@ -266,6 +268,7 @@ class VikeyIME : InputMethodService(), KeyboardView.Listener, EmojiKeyboardView.
     override fun onUpdateSelection(oldStart: Int, oldEnd: Int, newStart: Int, newEnd: Int, candStart: Int, candEnd: Int) {
         super.onUpdateSelection(oldStart, oldEnd, newStart, newEnd, candStart, candEnd)
         if (!::keyboard.isInitialized) return
+        selLength = maxOf(0, newEnd - newStart)
         // the app may lag a few of our edits behind: a position we produced recently is not a move. It reports them
         // in order, so the ones before it are done with: a tap back onto one of them later is a move ("tô|i" + s → "tôsi")
         val i = if (newStart == newEnd) recentPositions.indexOf(newStart) else -1
@@ -344,7 +347,7 @@ class VikeyIME : InputMethodService(), KeyboardView.Listener, EmojiKeyboardView.
 
     override fun keyboardBackspaceRepeat(count: Int) {
         // like the system keyboard: characters first, whole words after ~2 seconds of holding
-        if (count <= 20) { backspace(); return }
+        if (count <= 20 || selLength > 0) { backspace(); return }
         val before = lastContext ?: ""
         if (before.isEmpty()) return
         var end = before.length; var k = 0
@@ -396,6 +399,9 @@ class VikeyIME : InputMethodService(), KeyboardView.Listener, EmojiKeyboardView.
 
     private fun type(s: String) = apply(if (isPasswordField) Edit(0, s, false) else driver.typeCharacter(s, now))   // the engine never sees a password
     private fun backspace() {
+        if (selLength > 0) {   // a selection: Delete removes it, like the system keyboard (deleteSurroundingText skips it)
+            ic?.commitText("", 1); selLength = 0; driver.resetContext(); clearWord(); afterEdit(0, ""); return
+        }
         if (wordPrefix.isNotEmpty()) {   // every delete shortens the word, a held Delete too ("isnt", held back to "i", + t is "it")
             wordPrefix.setLength(wordPrefix.length - 1); wordXs.removeAt(wordXs.size - 1); wordYs.removeAt(wordYs.size - 1)
             wordCaps = minOf(wordCaps, wordPrefix.length)
@@ -670,6 +676,7 @@ class VikeyIME : InputMethodService(), KeyboardView.Listener, EmojiKeyboardView.
     }
 
     override fun emojiDelete() {
+        if (selLength > 0) { backspace(); return }
         val before = lastContext ?: ""
         val n = if (before.isEmpty()) 1 else lastGraphemeLength(before)
         ic?.deleteSurroundingText(n, 0)
