@@ -92,9 +92,12 @@ final class KeyboardViewController: UIInputViewController, KeyboardViewDelegate 
             keyboard.topAnchor.constraint(equalTo: view.topAnchor),
             keyboard.bottomAnchor.constraint(equalTo: view.bottomAnchor),
         ])
-        let h = view.heightAnchor.constraint(equalToConstant: KeyboardView.keyboardHeight(compactHeight: traitCollection.verticalSizeClass == .compact))
-        // 999, and the input view sizes itself from it: at .defaultHigh iOS showed its own, much taller height for a
-        // frame before ours (Tony, builds 40-45; before 40 a slow main-thread check at appear happened to hide it)
+        // The height must CHANGE in viewWillAppear: when the constant is already right before the keyboard appears,
+        // iOS first shows it at an in-between height (a frame of a tall, empty keyboard, Tony, builds 40-49; it
+        // happened whenever the keyboard's process was reused, so on most opens and when swiping between apps).
+        // So it starts 1 pt off here and after every disappearance, and loadSettings() sets the real height.
+        let h = view.heightAnchor.constraint(equalToConstant: KeyboardView.keyboardHeight(compactHeight: traitCollection.verticalSizeClass == .compact) - 1)
+        // 999, and the input view sizes itself from it
         h.priority = UILayoutPriority(999)
         h.isActive = true
         heightConstraint = h
@@ -140,6 +143,12 @@ final class KeyboardViewController: UIInputViewController, KeyboardViewDelegate 
         }
     }
 
+    override func viewDidDisappear(_ animated: Bool) {
+        super.viewDidDisappear(animated)
+        heightConstraint?.constant -= 1   // the next viewWillAppear must change it (see viewDidLoad)
+        hasAppeared = false
+    }
+
     override func viewWillDisappear(_ animated: Bool) {
         stallWatch?.invalidate(); stallWatch = nil
         keyboard.feedback.stop()
@@ -156,8 +165,10 @@ final class KeyboardViewController: UIInputViewController, KeyboardViewDelegate 
     override func traitCollectionDidChange(_ previous: UITraitCollection?) {
         super.traitCollectionDidChange(previous)
         let browsingEmoji = emojiView.map { !$0.isHidden && !$0.searching } ?? false
-        heightConstraint?.constant = KeyboardView.keyboardHeight(compactHeight: traitCollection.verticalSizeClass == .compact)
-            + (browsingEmoji ? EmojiKeyboardView.extraHeight : 0)
+        if hasAppeared {   // before it appears, viewWillAppear sets the height (see viewDidLoad)
+            heightConstraint?.constant = KeyboardView.keyboardHeight(compactHeight: traitCollection.verticalSizeClass == .compact)
+                + (browsingEmoji ? EmojiKeyboardView.extraHeight : 0)
+        }
         keyboard?.setNeedsLayout()
         if previous?.userInterfaceStyle != traitCollection.userInterfaceStyle { refresh() }
     }
@@ -171,6 +182,7 @@ final class KeyboardViewController: UIInputViewController, KeyboardViewDelegate 
         setContentVisible(abs(view.bounds.height - h) <= 2)
     }
     private var comingUp = false
+    private var hasAppeared = false
     private func setContentVisible(_ on: Bool) {
         let alpha: CGFloat = on ? 1 : 0
         if keyboard.alpha != alpha { keyboard.alpha = alpha }
@@ -284,6 +296,7 @@ final class KeyboardViewController: UIInputViewController, KeyboardViewDelegate 
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
         keyboard.animatesLanguage = true
+        hasAppeared = true
         comingUp = false; setContentVisible(true)
         keyboard.playMarkIntro()
         readSelection()   // opened onto text that's already selected
