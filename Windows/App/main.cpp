@@ -91,7 +91,7 @@ static void showMenu() {
 }
 static LRESULT CALLBACK wndProc(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
     using namespace vikey;
-    if (msg == WM_TASKBARCREATED) { Shell_NotifyIconW(NIM_ADD, &_nid); return 0; }   // put the icon back (_nid has the current one)
+    if (WM_TASKBARCREATED && msg == WM_TASKBARCREATED) { Shell_NotifyIconW(NIM_ADD, &_nid); return 0; }   // put the icon back (_nid has the current one)
     switch (msg) {
     case WM_TRAY:
         if (LOWORD(lp) == WM_LBUTTONUP) ui::showSettings(GetModuleHandleW(nullptr), false);
@@ -117,7 +117,9 @@ static LRESULT CALLBACK wndProc(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
     case WM_VIKEY_EMOJI: emoji::toggle(); return 0;
     case WM_TIMER: if (wp == TIMER_FLUSH) core::flushTypingLog(); return 0;
     case site::WM_SITE: { HWND w; std::wstring host = site::lastHost(&w); if (w == GetForegroundWindow()) core::onSiteChanged(host); return 0; }
-    case WM_SETTINGCHANGE: { bool dark = darkTaskbar(); DestroyIcon(_iconV); DestroyIcon(_iconE); _iconV = makeIcon(L'V', dark); _iconE = makeIcon(L'E', dark); updateTray(core::language()); return 0; }
+    case WM_SETTINGCHANGE: {
+        if (!lp || wcscmp((LPCWSTR)lp, L"ImmersiveColorSet") != 0) return 0;   // a theme change: every other setting broadcast is ignored
+        bool dark = darkTaskbar(); DestroyIcon(_iconV); DestroyIcon(_iconE); _iconV = makeIcon(L'V', dark); _iconE = makeIcon(L'E', dark); updateTray(core::language()); return 0; }
     case WM_DESTROY: core::stop(); Shell_NotifyIconW(NIM_DELETE, &_nid); PostQuitMessage(0); return 0;
     }
     return DefWindowProcW(h, msg, wp, lp);
