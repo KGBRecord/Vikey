@@ -26,6 +26,7 @@ CASES = [  # name, language (0 EN / 1 VI), autocap, keys, expected
     ("shortcut_vi",     1, False, "omw ", "On my way! "),
     ("strip_pick",      0, False, "teh\x03", "the "),   # \x03 = tap the middle strip cell (picks on lift)
     ("delete_selection",0, False, "hello world\x04\b", "hello "),   # \x04 = select the 5 characters before the cursor
+    ("dash_selection",  0, False, "a-hello\x04-", "a—"),     # the smart dash's own delete leaves the selection to the typed dash
 ]
 
 def main():
