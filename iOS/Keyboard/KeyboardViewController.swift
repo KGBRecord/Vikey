@@ -380,7 +380,9 @@ final class KeyboardViewController: UIInputViewController, KeyboardViewDelegate 
             clearWord()
             for ch in c { type(String(ch)) }
         case .char(let c):
-            if snapsBack(c) { backspace() }   // "this ." → "this." like the system keyboard (Tony)
+            if snapsBack(c) {   // "this ." → "this." like the system keyboard (Tony); our own delete, so not a Backspace undo of an auto switch
+                proxy.deleteBackward(); driver.resetContext(); afterEdit(deleted: 1, inserted: "")
+            }
             if c == "-", (lastContext ?? "").hasSuffix("-"), !(lastContext ?? "").hasSuffix("--"),
                (proxy.smartDashesType ?? .default) != .no {   // smart dashes: "--" → "—"
                 backspace(); clearWord(); type("—"); break

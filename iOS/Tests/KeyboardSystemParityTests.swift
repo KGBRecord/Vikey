@@ -68,6 +68,12 @@ final class KeyboardSystemParityTests: XCTestCase {
         XCTAssertEqual(p.text, "Xin chào. ")
     }
 
+    func testSnapBackKeepsAnAutoSwitchedWord() {   // the snap-back's delete is not a Backspace undo of the switch
+        let (vc, p) = make(1)
+        type("booj source vaay ? ", vc)
+        XCTAssertEqual(p.text, "Bộ source vây? ")
+    }
+
     func testSmartDash() { let (vc, p) = make(); type("a--b ", vc); XCTAssertEqual(p.text, "A—b ") }
     func testTextReplacement() {
         let (vc, p) = make()

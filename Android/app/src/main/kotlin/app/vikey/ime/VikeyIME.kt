@@ -291,7 +291,9 @@ class VikeyIME : InputMethodService(), KeyboardView.Listener, EmojiKeyboardView.
         when (kind) {
             is KeyKind.Char -> {
                 val c = kind.c
-                if (!isPasswordField && snapsBack(c)) backspace()   // "this ." → "this." like the system keyboard (Tony)
+                if (!isPasswordField && snapsBack(c)) {   // "this ." → "this." like the system keyboard (Tony); our own delete, so not a Backspace undo of an auto switch
+                    ic?.deleteSurroundingText(1, 0); driver.resetContext(); afterEdit(1, "")
+                }
                 val before = lastContext ?: ""
                 if (c == "-" && before.endsWith("-") && !before.endsWith("--") && smartDashesHere) {   // smart dashes: "--" → "—"
                     backspace(); clearWord(); type("—"); return
