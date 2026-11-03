@@ -169,7 +169,7 @@ struct OnboardingView: View {
                 .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             HStack(spacing: 12) {
                 HotkeyRecorder(raw: Binding(get: { hotkeyRaw }, set: { k in
-                    guard !Hotkey.sameKeys(k, emojiKey) else { return }   // already the emoji picker's
+                    guard emojiOn == 0 || !Hotkey.sameKeys(k, emojiKey) else { return }   // already the emoji picker's (only while it's on)
                     hotkeyRaw = k; Preferences.apply()
                 }))
                     .controlSize(.large)
@@ -192,7 +192,10 @@ struct OnboardingView: View {
             }
             Text("Bấm một phím tắt để mở bảng emoji ở giữa màn hình. Tìm bằng tiếng Việt hay tiếng Anh đều được: \"ngựa\" hay \"horse\" đều ra 🐴.")
                 .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-            Toggle(isOn: Binding(get: { emojiOn != 0 }, set: { emojiOn = $0 ? 1 : 0; Preferences.apply() })) {
+            Toggle(isOn: Binding(get: { emojiOn != 0 }, set: { on in
+                if on && Hotkey.sameKeys(emojiKey, hotkeyRaw) { emojiKey = 0 }   // a collision left from before: record it again
+                emojiOn = on ? 1 : 0; Preferences.apply()
+            })) {
                 Text("Bật bảng emoji")
             }
             .toggleStyle(.switch)

@@ -92,7 +92,7 @@ struct MainView: View {
     @ViewBuilder private var hotkeyRows: some View {
                 LabeledContent {
                     HotkeyRecorder(raw: Binding(get: { hotkeyRaw }, set: { k in
-                        guard !Hotkey.sameKeys(k, emojiKey) else { return }   // already the emoji picker's
+                        guard emojiOn == 0 || !Hotkey.sameKeys(k, emojiKey) else { return }   // already the emoji picker's (only while it's on)
                         hotkeyRaw = k; Preferences.apply()
                     }))
                 } label: {
@@ -146,7 +146,10 @@ struct MainView: View {
                 }
     }
     @ViewBuilder private var emojiRows: some View {
-                Toggle(isOn: Binding(get: { emojiOn != 0 }, set: { emojiOn = $0 ? 1 : 0; Preferences.apply() })) {
+                Toggle(isOn: Binding(get: { emojiOn != 0 }, set: { on in
+                    if on && Hotkey.sameKeys(emojiKey, hotkeyRaw) { emojiKey = 0 }   // a collision left from before: record it again
+                    emojiOn = on ? 1 : 0; Preferences.apply()
+                })) {
                     Tip("Bảng emoji", "Bấm phím tắt để mở bảng emoji ở giữa màn hình. Tìm bằng tiếng Việt hoặc tiếng Anh, gõ Telex vẫn tìm được: \"ngựa\", \"horse\" đều ra 🐴. Enter để chèn, Esc để đóng.")
                 }
                 if emojiOn != 0 {

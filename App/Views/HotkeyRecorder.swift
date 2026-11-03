@@ -29,7 +29,7 @@ struct HotkeyRecorder: View {
             let beep = Hotkey(raw: raw).beep
             if event.type == .keyDown {
                 if event.keyCode == 53 && mods.isEmpty { stop(); return nil }   // Esc cancels
-                if !mods.isDisjoint(with: [.control, .option, .command]) {   // ⇧ alone isn't enough: ⇧E would take every capital E
+                if allowModifiersOnly ? !mods.isEmpty : !mods.isDisjoint(with: [.control, .option, .command]) {   // emoji: ⇧ alone isn't enough, ⇧E would take every capital E
                     raw = Hotkey(keyCode: Int(VikeyCore.hotkeyKeyCode(for: event)), modifiers: mods, beep: beep).raw
                     stop()
                 }
