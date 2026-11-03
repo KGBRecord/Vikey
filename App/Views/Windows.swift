@@ -66,13 +66,12 @@ final class HostedWindow<Content: View> {
     }
     private var centered = false
 
-    /// After the content changed height (a card of the main window folded): resize, keeping the top edge in place.
-    func fitToContent() {
+    /// After the content changed height (a card folded, tab switched): resize, keeping the top edge in place.
+    func fitToContent(height: CGFloat? = nil) {
         guard let w = window, let host = self.host else { return }
         let measured = host.sizeThatFits(in: NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude))
         let targetWidth = size?.width ?? (measured.width > 0 ? measured.width : (w.contentLayoutRect.width > 0 ? w.contentLayoutRect.width : 460))
-        let fit = host.sizeThatFits(in: NSSize(width: targetWidth, height: CGFloat.greatestFiniteMagnitude))
-        let h = fit.height
+        let h = height ?? host.sizeThatFits(in: NSSize(width: targetWidth, height: CGFloat.greatestFiniteMagnitude)).height
         guard h > 0, abs(h - w.contentLayoutRect.height) > 1 else { return }
         let content = NSRect(x: 0, y: 0, width: targetWidth, height: h)
         var frame = w.frame
