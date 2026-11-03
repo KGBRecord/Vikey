@@ -53,6 +53,7 @@ struct MainView: View {
             guard newHeight > 0, abs(newHeight - lastContentHeight) > 1 else { return }
             lastContentHeight = newHeight
             DispatchQueue.main.async {
+                guard abs(newHeight - lastContentHeight) <= 1 else { return }
                 Windows.main.fitToContent(height: newHeight)
             }
         }
