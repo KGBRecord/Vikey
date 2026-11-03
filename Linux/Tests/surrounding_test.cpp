@@ -1,4 +1,4 @@
-// surroundingDeleteCount (#32): a delete never reaches past what the app reported before the cursor.
+// surroundingDeleteCount (#32): a delete never reaches past what the app reported before the cursor; only on GNOME Wayland.
 // usage: surrounding_test   (exit 1 on a failure; Linux/check.sh runs it)
 #include "Surrounding.h"
 #include <cstdio>
@@ -13,6 +13,11 @@ int main() {
     };
     int fails = 0;
     for (auto& c : t) { int got = surroundingDeleteCount(c.n, c.cursor); if (got != c.want) { fails++; printf("FAIL %s: delete %d, cursor %d -> %d, expected %d\n", c.what, c.n, c.cursor, got, c.want); } }
+    struct { const char *type, *desktop; bool want; } s[] = {
+        {"wayland", "GNOME", true}, {"wayland", "ubuntu:GNOME", true}, {"x11", "ubuntu:GNOME", false},
+        {"wayland", "KDE", false}, {nullptr, "GNOME", false}, {"wayland", nullptr, false},
+    };
+    for (auto& c : s) if (surroundingClampNeeded(c.type, c.desktop) != c.want) { fails++; printf("FAIL clamp needed: %s, %s\n", c.type ? c.type : "(unset)", c.desktop ? c.desktop : "(unset)"); }
     printf(fails ? "surrounding delete: FAIL\n" : "surrounding delete: ok\n");
     return fails ? 1 : 0;
 }

@@ -53,6 +53,7 @@ static std::string utf8(const std::u32string& w) { std::string o; for (char32_t 
 // one that never does uses pre-edit.
 static bool _surroundingSeen = false;      // the focused app has sent its surrounding text since focus_in
 static int _reportedCursor = -1;           // where it last said the cursor is (-1: not since focus_in)
+static const bool _clampDeletes = surroundingClampNeeded(getenv("XDG_SESSION_TYPE"), getenv("XDG_CURRENT_DESKTOP"));   // GNOME Wayland (#32)
 static std::u32string _pre;                // pre-edit text not committed yet
 static bool preeditMode() {
     if (!_active || !(_active->caps & IBUS_CAP_PREEDIT_TEXT)) return false;
@@ -82,7 +83,7 @@ static void outBackspaces(int n) {
         int k = std::min<int>(n, (int)_pre.size()); _pre.erase(_pre.size() - k); n -= k; showPre();
         if (n <= 0) return;   // more than the pre-edit holds: the app has to delete committed text (rare; best effort below)
     }
-    if (_active->caps & IBUS_CAP_SURROUNDING_TEXT) { n = surroundingDeleteCount(n, _reportedCursor); if (n > 0) ibus_engine_delete_surrounding_text(IBUS_ENGINE(_active), -n, n); }   // the app's last report, not IBus's copy: that one drops by our deletes, skips our commits and outlives focus_in
+    if (_active->caps & IBUS_CAP_SURROUNDING_TEXT) { if (_clampDeletes) n = surroundingDeleteCount(n, _reportedCursor); if (n > 0) ibus_engine_delete_surrounding_text(IBUS_ENGINE(_active), -n, n); }   // the app's last report, not IBus's copy: that one drops by our deletes, skips our commits and outlives focus_in
     else for (int i = 0; i < n; i++) { ibus_engine_forward_key_event(IBUS_ENGINE(_active), IBUS_KEY_BackSpace, 14, 0); ibus_engine_forward_key_event(IBUS_ENGINE(_active), IBUS_KEY_BackSpace, 14, IBUS_RELEASE_MASK); }
 }
 static void outText(const std::u32string& t) {
