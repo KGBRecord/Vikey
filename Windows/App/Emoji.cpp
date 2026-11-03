@@ -452,7 +452,7 @@ static wchar_t charFor(DWORD vk, unsigned flags) {
     int n = ToUnicodeEx(vk, MapVirtualKeyExW(vk, MAPVK_VK_TO_VSC, hkl), ks, buf, 8, 1 << 2, hkl);
     return n == 1 && buf[0] >= 0x20 ? buf[0] : 0;
 }
-static void onKey(DWORD vk, unsigned flags) {   // from the keyboard hook (WM_APP+10, only the keys pickerKey in Core.cpp passes); EmojiPanel.keyDown
+static void onKey(DWORD vk, unsigned flags) {   // from the keyboard hook (WM_APP+10; Windows' shortcuts and media keys don't come here); EmojiPanel.keyDown
     bool ctrl = flags & 2, alt = flags & 4, win = flags & 8;
     switch (vk) {
     case VK_ESCAPE: if (_raw.empty()) close(); else setRaw(L""); break;   // Esc: clears the search, then closes
