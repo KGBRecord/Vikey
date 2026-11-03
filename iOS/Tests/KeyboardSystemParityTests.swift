@@ -33,6 +33,25 @@ final class KeyboardSystemParityTests: XCTestCase {
     func testWont() { let (vc, p) = make(); type("i wont go ", vc); XCTAssertEqual(p.text, "I won't go ") }
 
     // auto-capitals
+    func testCapitalAfterDotFrom123() {   // the period from the 123 page, then space: back on ABC with the capital
+        for lang in [0, 1] {
+            let (vc, p) = make(lang)
+            type("ok", vc)
+            vc.keyboard(sender, didTap: .layer(.numbers)); vc.keyboard(sender, didTap: .char("."))
+            type(" build ", vc)
+            XCTAssertEqual(p.text, "Ok. Build ", "lang \(lang)")
+        }
+    }
+    func testCapitalAfterDotVariants() {   // Tony: "Just spotted this. build 51" (no capital after the dot)
+        for lang in [0, 1] {
+            for (keys, want) in [("just spotted this. build 51 ", "Just spotted this. Build 51 "),
+                                 ("ok. build ", "Ok. Build "), ("see teh. build ", "See the. Build "),
+                                 ("xin chaof. build ", "Xin chào. Build "), ("ok  build ", "Ok. Build "), ("spotted this  build ", "Spotted this. Build ")] {
+                let (vc, p) = make(lang); type(keys, vc)
+                XCTAssertEqual(p.text, want, "lang \(lang): \(keys)")
+            }
+        }
+    }
     func testCapitalAtStartAndAfterSentences() {
         let (vc, p) = make()
         type("hi. there? yes! ok\nnew line ", vc)

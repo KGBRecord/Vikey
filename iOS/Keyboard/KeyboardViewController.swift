@@ -486,7 +486,10 @@ final class KeyboardViewController: UIInputViewController, KeyboardViewDelegate 
         }
         type(" ")
         lastSpace = now
-        if keyboard.layer_ != .letters { keyboard.layer_ = .letters }
+        if keyboard.layer_ != .letters {   // space on 123 goes back to ABC: with the capital after ". " (Tony: "this. build")
+            keyboard.layer_ = .letters
+            updateAutoShift(lastContext ?? "")
+        }
     }
 
     private func type(_ s: String) {

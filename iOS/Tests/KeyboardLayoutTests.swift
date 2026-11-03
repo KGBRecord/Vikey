@@ -137,3 +137,20 @@ final class MarkIntroThrottleTests: XCTestCase {
         UserDefaults.standard.removeObject(forKey: key)
     }
 }
+
+/// The key under the corner element never shows, even when the strip came on after the keyboard was built
+/// (Tony, build 51: a key-coloured square behind the pill in dark mode).
+final class CornerKeyInvisibleTests: XCTestCase {
+    func testLanguageKeyClearAfterStripTurnsOn() {
+        KeyboardView.barOn = false; KeyboardView.langStyle = 1
+        let kb = KeyboardView(frame: CGRect(x: 0, y: 0, width: 402, height: KeyboardView.keyboardHeight(compactHeight: false)))
+        kb.dark = true
+        kb.layoutIfNeeded()
+        KeyboardView.barOn = true
+        kb.setNeedsLayout(); kb.layoutIfNeeded()
+        let cap = kb.subviews.compactMap { $0 as? KeyCap }.first { $0.frame.minY < 40 && $0.frame.minX < 20 }
+        XCTAssertNotNil(cap)
+        XCTAssertEqual(cap?.backgroundColor, .clear)
+        XCTAssertEqual(cap?.normalColor, .clear)
+    }
+}

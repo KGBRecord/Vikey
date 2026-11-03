@@ -306,6 +306,12 @@ final class KeyboardView: UIView {
         bar.showsBrand = !Self.markOn
         mark.isHidden = !(Self.markOn && langTop)
         if !mark.isHidden {
+            // the key under the corner element is only a tap area; its colours may date from before the strip was on
+            // (a key-coloured square showed behind the pill in dark mode, Tony, build 51)
+            if let v = keys.first(where: { $0.def.kind == .language })?.view {
+                v.normalColor = .clear; v.pressedColor = .clear; v.layer.shadowOpacity = 0
+                if v.backgroundColor != .clear { v.backgroundColor = .clear }
+            }
             mark.frame = CGRect(x: side, y: dh + side, width: W - 2 * side, height: Self.pillH)
             mark.pillWidth = langTopWidth
             mark.dark = dark
