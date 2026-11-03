@@ -403,7 +403,7 @@ class VikeyIME : InputMethodService(), KeyboardView.Listener, EmojiKeyboardView.
     /** Delete with text selected removes the selection, like the system keyboard (deleteSurroundingText skips it). */
     private fun deleteSelection(): Boolean {
         if (selLength == 0) return false
-        ic?.commitText("", 1); selLength = 0; driver.resetContext(); clearWord(); afterEdit(0, "")
+        ic?.commitText("", 1); driver.resetContext(); clearWord(); afterEdit(0, "")
         return true
     }
     private fun backspace() {
@@ -448,6 +448,7 @@ class VikeyIME : InputMethodService(), KeyboardView.Listener, EmojiKeyboardView.
     }
 
     private fun afterEdit(deleted: Int, inserted: String) {
+        selLength = 0   // our edit replaced any selection; onUpdateSelection may not have come yet
         var c = lastContext ?: ""
         c = c.dropLast(minOf(deleted, c.length)) + inserted
         if (c.length > 4000) c = c.takeLast(2000)
