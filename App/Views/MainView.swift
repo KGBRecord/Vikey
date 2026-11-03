@@ -91,7 +91,10 @@ struct MainView: View {
 
     @ViewBuilder private var hotkeyRows: some View {
                 LabeledContent {
-                    HotkeyRecorder(raw: Binding(get: { hotkeyRaw }, set: { hotkeyRaw = $0; Preferences.apply() }))
+                    HotkeyRecorder(raw: Binding(get: { hotkeyRaw }, set: { k in
+                        guard !Hotkey.sameKeys(k, emojiKey) else { return }   // already the emoji picker's
+                        hotkeyRaw = k; Preferences.apply()
+                    }))
                 } label: {
                     Tip("Phím chuyển Anh/Việt", "Bấm tổ hợp phím này để chuyển giữa tiếng Việt và tiếng Anh. Bấm vào ô để đặt phím khác.")
                 }
@@ -149,7 +152,7 @@ struct MainView: View {
                 if emojiOn != 0 {
                     LabeledContent {
                         HotkeyRecorder(raw: Binding(get: { emojiKey }, set: { k in
-                            guard k != hotkeyRaw & ~0x8000 else { return }   // already the Vietnamese/English switch
+                            guard !Hotkey.sameKeys(k, hotkeyRaw) else { return }   // already the Vietnamese/English switch
                             emojiKey = k & ~0x8000; Preferences.apply()
                         }), allowModifiersOnly: false, autoStart: emojiKey == 0)
                     } label: {
