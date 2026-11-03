@@ -68,6 +68,14 @@ final class KeyboardSystemParityTests: XCTestCase {
         XCTAssertEqual(p.text, "Xin chào. ")
     }
 
+    func testPauseAfterManualSwitchSurvivesTheKeyboardReappearing() {   // D21: 5 seconds without auto switch
+        let (vc, p) = make(1)
+        vc.keyboard(sender, didTap: .language)   // to English by hand
+        vc.viewWillAppear(false)                 // the keyboard comes back (another field): settings are read again
+        type("vaay ", vc)
+        XCTAssertEqual(p.text, "Vaay ")
+    }
+
     func testSmartDash() { let (vc, p) = make(); type("a--b ", vc); XCTAssertEqual(p.text, "A—b ") }
     func testTextReplacement() {
         let (vc, p) = make()
