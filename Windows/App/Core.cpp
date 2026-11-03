@@ -306,6 +306,7 @@ static void batchKey(WORD vk, DWORD extra = 0) {
 }
 static void flushBatch() { if (!_batch.empty()) { SendInput((UINT)_batch.size(), _batch.data(), sizeof(INPUT)); _batch.clear(); } }
 
+static bool IsLetterKey(Uint16 key);
 /// Types the engine's new characters; for a restore, also the key that triggered it.
 static void batchEngineChars() {
     wchar_t text[MAX_BUFF + 2]; int n = 0;
@@ -315,7 +316,7 @@ static void batchEngineChars() {
     }
     bool sendControlKey = false;
     if (pData->code == vRestore || pData->code == vRestoreAndStartNewSession) {
-        Uint16 ch = keyCodeToCharacter(_keycode | ((_flag & F_CAPS) || (_flag & F_SHIFT) ? CAPS_MASK : 0));
+        Uint16 ch = keyCodeToCharacter(_keycode | ((_flag & F_SHIFT) || ((_flag & F_CAPS) && IsLetterKey(_keycode)) ? CAPS_MASK : 0));   // Caps Lock shifts letters only ("NAS," gave "NAS<")
         if (ch != 0) text[n++] = (wchar_t)ch; else sendControlKey = true;
     }
     if (pData->code == vRestoreAndStartNewSession) startNewSession();
@@ -390,7 +391,7 @@ static void RememberAutoFix(int correctedCount) {
     _autoFixUndo.active = false;
     if (vAutoSwitchUndoCount <= 0 || correctedCount <= 0) return;
     for (int x = 0; x < vAutoSwitchUndoCount; x++) if ((vAutoSwitchUndoData[x] & 0xFFFF) == KEY_SPACE && !(vAutoSwitchUndoData[x] & CHAR_CODE_MASK)) return;
-    Uint16 breakChar = keyCodeToCharacter(_keycode | ((_flag & F_CAPS) || (_flag & F_SHIFT) ? CAPS_MASK : 0));
+    Uint16 breakChar = keyCodeToCharacter(_keycode | ((_flag & F_SHIFT) || ((_flag & F_CAPS) && IsLetterKey(_keycode)) ? CAPS_MASK : 0));   // Caps Lock shifts letters only (Space + CAPS_MASK is 0)
     if (breakChar == 0) return;
     int n = 0;
     for (int x = 0; x < vAutoSwitchUndoCount && n < MAX_BUFF; x++) { wchar_t c = CharacterOf(vAutoSwitchUndoData[x]); if (c == 0) return; _autoFixUndo.text[n++] = c; }

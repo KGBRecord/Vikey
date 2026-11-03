@@ -569,14 +569,12 @@ extern "C" {
         }
     }
 
-    /// Posts a real key press (used for control keys such as Return after a restore).
-    void SendKeyCode(Uint32 data) {
-        CGEventRef down = CGEventCreateKeyboardEvent(myEventSource, (CGKeyCode)(data & 0xFFFF), true);
-        CGEventRef up = CGEventCreateKeyboardEvent(myEventSource, (CGKeyCode)(data & 0xFFFF), false);
+    /// Posts a real key press with these modifiers (used for control keys such as Return after a restore).
+    void SendKeyCode(CGKeyCode key, CGEventFlags flags) {
+        CGEventRef down = CGEventCreateKeyboardEvent(myEventSource, key, true);
+        CGEventRef up = CGEventCreateKeyboardEvent(myEventSource, key, false);
         CGEventSetIntegerValueField(down, kCGEventSourceUserData, VIKEY_EVENT_TAG);
         CGEventSetIntegerValueField(up, kCGEventSourceUserData, VIKEY_EVENT_TAG);
-        CGEventFlags flags = CGEventGetFlags(down);
-        if (data & CAPS_MASK) flags |= kCGEventFlagMaskShift; else flags &= ~kCGEventFlagMaskShift;
         flags |= kCGEventFlagMaskNonCoalesced;
         CGEventSetFlags(down, flags);
         CGEventSetFlags(up, flags);
@@ -610,6 +608,7 @@ extern "C" {
         CFRelease(up);
     }
 
+    static bool IsLetterKey(const Uint16& key);
     /// Types the engine's new characters; for a restore, also the key that triggered it.
     void SendNewCharString() {
         UniChar text[MAX_BUFF + 2];
@@ -620,12 +619,12 @@ extern "C" {
         }
         bool sendControlKey = false;
         if (pData->code == vRestore || pData->code == vRestoreAndStartNewSession) {
-            Uint16 ch = keyCodeToCharacter(_keycode | ((_flag & kCGEventFlagMaskAlphaShift) || (_flag & kCGEventFlagMaskShift) ? CAPS_MASK : 0));
+            Uint16 ch = keyCodeToCharacter(_keycode | ((_flag & kCGEventFlagMaskShift) || ((_flag & kCGEventFlagMaskAlphaShift) && IsLetterKey(_keycode)) ? CAPS_MASK : 0));   // Caps Lock shifts letters only ("NAS," gave "NAS<")
             if (ch != 0) text[n++] = ch; else sendControlKey = true;   // Return, Tab...: send the real key after the text
         }
         if (pData->code == vRestoreAndStartNewSession) startNewSession();
         if (n > 0) PostText(text, n);
-        if (sendControlKey) SendKeyCode(_keycode);
+        if (sendControlKey) SendKeyCode(_keycode, _flag);   // the key press's own modifiers: ⇧↩ stays a new line, not a send
     }
 
     /// flags: the modifiers held. For a key hotkey (⌥Z) that's the key press's own flags, so holding ⌥ and
@@ -955,7 +954,7 @@ extern "C" {
         if (vAutoSwitchUndoCount <= 0 || correctedCount <= 0) return;
         // only a fix of the last word is undone; one that also fixed earlier words stays (Backspace just deletes)
         for (int x = 0; x < vAutoSwitchUndoCount; x++) if ((vAutoSwitchUndoData[x] & 0xFFFF) == KEY_SPACE && !(vAutoSwitchUndoData[x] & CHAR_CODE_MASK)) return;
-        Uint16 breakChar = keyCodeToCharacter(_keycode | ((_flag & kCGEventFlagMaskAlphaShift) || (_flag & kCGEventFlagMaskShift) ? CAPS_MASK : 0));
+        Uint16 breakChar = keyCodeToCharacter(_keycode | ((_flag & kCGEventFlagMaskShift) || ((_flag & kCGEventFlagMaskAlphaShift) && IsLetterKey(_keycode)) ? CAPS_MASK : 0));   // Caps Lock shifts letters only (Space + CAPS_MASK is 0)
         if (breakChar == 0) return; // Enter and the like have already acted
         int n = 0;
         for (int x = 0; x < vAutoSwitchUndoCount && n < MAX_BUFF; x++) {

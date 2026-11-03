@@ -55,7 +55,8 @@ class App(Gtk.Application):
                 if c == '{':
                     e = keys.index('}', i); cmd = keys[i+1:e]
                     if cmd.startswith(('keydown ', 'keyup ')): xdo(*cmd.split())   # a key held across others: {keydown alt}zz{keyup alt}
-                    else: xdo('key', '--clearmodifiers', cmd.replace('alt+z', 'alt+z'))
+                    elif cmd == 'caps': xdo('key', 'Caps_Lock')   # --clearmodifiers would toggle Caps Lock back
+                    else: xdo('key', '--clearmodifiers', cmd)
                     time.sleep(0.3); i = e + 1; continue
                 if c == ' ': xdo('key', 'space')
                 else: xdo('type', '--delay', '25', c)

@@ -90,12 +90,12 @@ static void outText(const std::u32string& t) {
 }
 // the key being handled: a restore re-sends the key itself, not the engine's stand-in for it (Home, End, Delete,
 // Page Up/Down are KEY_ESC to the engine: re-sending Escape left the cursor where it was)
-static guint _keyval = 0, _keyHw = 0;
+static guint _keyval = 0, _keyHw = 0, _keyState = 0;
 static void outControlKey(Uint16 key, bool shift) {
     if (!_active) return;
     flushPre();
     guint ks = _keyval ? _keyval : keysymOf(key), hw = _keyval ? _keyHw : 0; if (!ks) return;
-    guint st = shift ? IBUS_SHIFT_MASK : 0;
+    guint st = _keyval ? _keyState & (IBUS_SHIFT_MASK | IBUS_LOCK_MASK | IBUS_CONTROL_MASK | IBUS_MOD1_MASK | IBUS_SUPER_MASK) : (shift ? IBUS_SHIFT_MASK : 0);   // the key's own modifiers: Ctrl+Enter stays Ctrl+Enter
     ibus_engine_forward_key_event(IBUS_ENGINE(_active), ks, hw, st); ibus_engine_forward_key_event(IBUS_ENGINE(_active), ks, hw, st | IBUS_RELEASE_MASK);
 }
 // The switch sound (Tony picked "sparkle"): two tiny notes, rising into Vietnamese, falling into English. The same
@@ -228,7 +228,7 @@ static gboolean vikey_process_key_event(IBusEngine* engine, guint keyval, guint 
     // join the word before it ("a", KP_Add, "a" gave "aâ"); F-keys and media keys don't
     if (m.key == KEY_EMPTY) { core::otherKeyDown(); flushPre(); if (g_unichar_isprint(ibus_keyval_to_unicode(keyval))) core::click(); return FALSE; }
     unsigned flags = flagsOf(state);
-    _keyval = keyval; _keyHw = keycode;
+    _keyval = keyval; _keyHw = keycode; _keyState = state;
     bool consumed = core::keyDown(m.key, m.shift || (flags & core::F_SHIFT), flags);
     _keyval = _keyHw = 0;
     updateLangProp(e);

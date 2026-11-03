@@ -216,6 +216,7 @@ class VikeyIME : InputMethodService(), KeyboardView.Listener, EmojiKeyboardView.
         readContext()
         cursorPos = if (info.initialSelStart >= 0) info.initialSelStart else -1
         recentPositions.clear()   // the last field's positions mean nothing here
+        lastCorrection = null; keepWord = null   // nor its auto-correct: Backspace here deletes, it doesn't undo an old fix
         clearWord()
         updateAutoShift(lastContext ?: "")
     }
@@ -291,7 +292,9 @@ class VikeyIME : InputMethodService(), KeyboardView.Listener, EmojiKeyboardView.
         when (kind) {
             is KeyKind.Char -> {
                 val c = kind.c
-                if (!isPasswordField && snapsBack(c)) backspace()   // "this ." → "this." like the system keyboard (Tony)
+                if (!isPasswordField && snapsBack(c)) {   // "this ." → "this." like the system keyboard (Tony); our own delete, so not a Backspace undo of an auto switch
+                    ic?.deleteSurroundingText(1, 0); driver.resetContext(); afterEdit(1, "")
+                }
                 val before = lastContext ?: ""
                 if (c == "-" && before.endsWith("-") && !before.endsWith("--") && smartDashesHere) {   // smart dashes: "--" → "—"
                     backspace(); clearWord(); type("—"); return
@@ -319,6 +322,9 @@ class VikeyIME : InputMethodService(), KeyboardView.Listener, EmojiKeyboardView.
             KeyKind.Return -> {
                 clearWord()
                 if (hasEnterAction && (imeOptions and EditorInfo.IME_MASK_ACTION) != EditorInfo.IME_ACTION_NONE && (imeOptions and EditorInfo.IME_MASK_ACTION) != EditorInfo.IME_ACTION_UNSPECIFIED) {
+                    if (!isPasswordField) {   // the word ends first, as on iOS ("server" was searched for as "sẻver")
+                        val e = driver.typeCharacter("\n", now); apply(Edit(e.deleteCount, e.text.removeSuffix("\n"), e.languageChanged))
+                    }
                     driver.resetContext(); ic?.performEditorAction(imeOptions and EditorInfo.IME_MASK_ACTION)
                 } else type("\n")
             }

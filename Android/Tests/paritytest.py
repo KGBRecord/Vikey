@@ -15,6 +15,7 @@ CASES = [  # name, language (0 EN / 1 VI), autocap, keys, expected
     ("snap_period",     0, False, "this .", "this."),
     ("snap_comma",      0, False, "well ,", "well,"),
     ("snap_close_paren",0, False, "(ok )", "(ok)"),
+    ("snap_after_switch",1, False, "booj source vaay ?", "bộ source vây?"),   # the snap-back's delete isn't a Backspace undo
     ("no_snap_open",    0, False, "a (", "a ("),
     ("smart_dash",      0, False, "a--b", "a—b"),
     ("lets_capital",    0, False, "Lets ", "Let's "),

@@ -1,4 +1,4 @@
-# name	start	keys	expected   (keys: \b Backspace, \n Enter, {alt+z} switch hotkey)
+# name	start	keys	expected   (keys: \b Backspace, \n Enter, {alt+z} switch hotkey, {caps} Caps Lock)
 telex_basic	vi	tieengs vieetj 	tiếng việt 
 telex_tone_anywhere	vi	truowfng truongwf truwownfg 	trường trường trường 
 hoa_modern	vi	hoaf 	hoà 
@@ -27,3 +27,6 @@ acronym_keeps_prev_D42	vi	e lieen heej been ASL 	e liên hệ bên ASL
 numpad_digit_D33	vi	a{num1}a	a1a
 numpad_operator_ends_word	vi	a{add}a	a+a
 restore_then_home_moves	vi	testflight{home}a	atestflight
+capslock_comma_after_acronym	vi	NAS{caps},{caps}	NAS,
+capslock_period_en_D41	en	THOONG{caps}.{caps}	THÔNG.
+capslock_undo_at_space	vi	more{caps} {caps}\b	moẻ

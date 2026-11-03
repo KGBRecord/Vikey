@@ -251,6 +251,7 @@ final class KeyboardViewController: UIInputViewController, KeyboardViewDelegate 
         lastContext = proxy.documentContextBeforeInput
         lastAfter = proxy.documentContextAfterInput ?? ""
         recentContexts = []   // the last field's states mean nothing here
+        lastCorrection = nil; keepWord = nil   // nor its auto-correct: Backspace here deletes, it doesn't undo an old fix
         clearWord()
         updateAutoShift(lastContext ?? "")
     }
@@ -380,7 +381,9 @@ final class KeyboardViewController: UIInputViewController, KeyboardViewDelegate 
             clearWord()
             for ch in c { type(String(ch)) }
         case .char(let c):
-            if snapsBack(c) { backspace() }   // "this ." → "this." like the system keyboard (Tony)
+            if snapsBack(c) {   // "this ." → "this." like the system keyboard (Tony); our own delete, so not a Backspace undo of an auto switch
+                proxy.deleteBackward(); driver.resetContext(); afterEdit(deleted: 1, inserted: "")
+            }
             if c == "-", (lastContext ?? "").hasSuffix("-"), !(lastContext ?? "").hasSuffix("--"),
                (proxy.smartDashesType ?? .default) != .no {   // smart dashes: "--" → "—"
                 backspace(); clearWord(); type("—"); break
@@ -483,7 +486,10 @@ final class KeyboardViewController: UIInputViewController, KeyboardViewDelegate 
         }
         type(" ")
         lastSpace = now
-        if keyboard.layer_ != .letters { keyboard.layer_ = .letters }
+        if keyboard.layer_ != .letters {   // space on 123 goes back to ABC: with the capital after ". " (Tony: "this. build")
+            keyboard.layer_ = .letters
+            updateAutoShift(lastContext ?? "")
+        }
     }
 
     private func type(_ s: String) {

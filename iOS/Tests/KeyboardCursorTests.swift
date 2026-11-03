@@ -95,6 +95,17 @@ final class KeyboardCursorTests: XCTestCase {
         XCTAssertEqual(p.text, String(corrected.prefix(0)) + String(corrected.dropFirst()))   // just one character, the one before the cursor
     }
 
+    func testBackspaceAfterTheKeyboardReappearsDoesNotUndoAnAutoCorrection() {
+        let (vc, p) = make()
+        vc.setLanguageForTests(0)
+        type("teh ", vc)
+        let corrected = p.text
+        XCTAssertNotEqual(corrected.lowercased(), "teh ")   // auto-correct ran
+        vc.viewWillDisappear(false); vc.viewWillAppear(false)   // keyboard hidden, then back on the same text
+        backspace(vc)
+        XCTAssertEqual(p.text, String(corrected.dropLast()))   // only the space goes, the correction stays
+    }
+
     func testTapToTheSamePlaceKeepsTheWord() {
         let (vc, p) = make()
         type("tooi", vc)
