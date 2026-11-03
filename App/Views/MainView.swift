@@ -20,6 +20,7 @@ struct MainView: View {
     @State private var launchAtLogin = LaunchAtLogin.isEnabled
     @State private var browserDenied = false
     @State private var excluded = ExcludedApps.all
+    @State private var lastContentHeight: CGFloat = 0
     @ObservedObject private var updater = Updater.shared
 
     var body: some View {
@@ -49,7 +50,11 @@ struct MainView: View {
             }
         )
         .onPreferenceChange(ContentHeightPreferenceKey.self) { newHeight in
-            Windows.main.fitToContent(height: newHeight)
+            guard newHeight > 0, abs(newHeight - lastContentHeight) > 1 else { return }
+            lastContentHeight = newHeight
+            DispatchQueue.main.async {
+                Windows.main.fitToContent(height: newHeight)
+            }
         }
         .alert("Vikey chưa được phép đọc địa chỉ trang web", isPresented: $browserDenied) {
             Button("Mở Cài đặt hệ thống") {
