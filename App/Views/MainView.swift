@@ -43,6 +43,14 @@ struct MainView: View {
         }
         .frame(width: 460)
         .fixedSize(horizontal: false, vertical: true)
+        .background(
+            GeometryReader { geo in
+                Color.clear.preference(key: ContentHeightPreferenceKey.self, value: geo.size.height)
+            }
+        )
+        .onPreferenceChange(ContentHeightPreferenceKey.self) { newHeight in
+            Windows.main.fitToContent(height: newHeight)
+        }
         .alert("Vikey chưa được phép đọc địa chỉ trang web", isPresented: $browserDenied) {
             Button("Mở Cài đặt hệ thống") {
                 NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Automation")!)
@@ -62,7 +70,6 @@ struct MainView: View {
 
     private func select(_ id: String) {
         tab = id
-        DispatchQueue.main.async { Windows.main.fitToContent() }   // the window takes the height of the tab
     }
 
     private var tabBar: some View {
@@ -271,4 +278,12 @@ struct Tip: View {
 /// Binds an Int (0/1) preference used by the C core to a Toggle, applying it on change.
 func flag(_ value: Binding<Int>) -> Binding<Bool> {
     Binding(get: { value.wrappedValue != 0 }, set: { value.wrappedValue = $0 ? 1 : 0; Preferences.apply() })
+}
+
+/// Reports the natural layout height of MainView's content to HostedWindow.
+private struct ContentHeightPreferenceKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
+    }
 }
