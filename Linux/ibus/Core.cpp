@@ -19,7 +19,7 @@ static const int EMPTY_HOTKEY = 0xFE0000FE;
 static Output _out;
 static vKeyHookState* pData = nullptr;
 static unsigned _flag = 0, _lastFlag = 0;
-static bool _hotkeyHeld = false;   // the switch hotkey's key is down: IBus has no repeat flag, so presses before its release are auto-repeat
+static bool _hotkeyHeld = false;   // the switch hotkey's key is down: IBus has no repeat flag, so presses before its release are auto-repeat; a click or focus_out clears it (a missed release)
 static Uint16 _keycode = 0;
 static std::function<void(int)> _observer;
 static std::string _frontApp = "UnknownApp";
@@ -351,7 +351,7 @@ bool keyDown(Uint16 key, bool shift, unsigned flags) {
 }
 void resetTyping() { ResetEnglishWord(true); _autoFixUndo.active = false; startNewSession(); }
 void insertText(const std::u32string& text) { resetTyping(); if (!text.empty()) _out.text(text); }
-void click() { _autoFixUndo.active = false; _tlSinceAuto = false; TLEndWord("click"); if (vTypingLogEnabled) TLWrite("\"e\":\"reset\""); if (vLanguage == 0) ResetEnglishWord(true); else vKeyHandleEvent(vKeyEvent::Mouse, vKeyEventState::MouseDown, 0); }
+void click() { _hotkeyHeld = false; _autoFixUndo.active = false; _tlSinceAuto = false; TLEndWord("click"); if (vTypingLogEnabled) TLWrite("\"e\":\"reset\""); if (vLanguage == 0) ResetEnglishWord(true); else vKeyHandleEvent(vKeyEvent::Mouse, vKeyEventState::MouseDown, 0); }
 void init(Output out) {
     _out = out;
     pData = (vKeyHookState*)vKeyInit();
