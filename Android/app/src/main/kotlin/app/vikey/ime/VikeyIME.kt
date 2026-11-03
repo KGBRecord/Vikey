@@ -319,6 +319,9 @@ class VikeyIME : InputMethodService(), KeyboardView.Listener, EmojiKeyboardView.
             KeyKind.Return -> {
                 clearWord()
                 if (hasEnterAction && (imeOptions and EditorInfo.IME_MASK_ACTION) != EditorInfo.IME_ACTION_NONE && (imeOptions and EditorInfo.IME_MASK_ACTION) != EditorInfo.IME_ACTION_UNSPECIFIED) {
+                    if (!isPasswordField) {   // the word ends first, as on iOS ("server" was searched for as "sẻver")
+                        val e = driver.typeCharacter("\n", now); apply(Edit(e.deleteCount, e.text.removeSuffix("\n"), e.languageChanged))
+                    }
                     driver.resetContext(); ic?.performEditorAction(imeOptions and EditorInfo.IME_MASK_ACTION)
                 } else type("\n")
             }
