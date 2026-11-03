@@ -51,7 +51,7 @@ static bool KeyFor(unichar c, Uint16 &key, bool &shift) {
 - (NSInteger)language { return vLanguage; }
 - (void)setLanguage:(NSInteger)language { _d->setLanguage((int)language); }
 - (BOOL)autoSwitch { return _d->autoSwitch; }
-- (void)setAutoSwitch:(BOOL)on { _d->autoSwitch = on; vAutoSwitchByTyping = on; }
+- (void)setAutoSwitch:(BOOL)on { _d->autoSwitch = on; }   // the driver sets the engine's switch on the next key, so a pause after a manual switch stays
 - (double)pauseAfterManual { return _d->pauseAfterManual; }
 - (void)setPauseAfterManual:(double)s { _d->pauseAfterManual = s; }
 - (BOOL)spelling { return vCheckSpelling; }

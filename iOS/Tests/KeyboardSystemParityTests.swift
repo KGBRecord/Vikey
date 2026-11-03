@@ -78,6 +78,17 @@ final class KeyboardSystemParityTests: XCTestCase {
         XCTAssertEqual(p.text, "Omw")   // same as an auto-correct undo
     }
 
+    func testPauseAfterManualSwitchSurvivesTheKeyboardReappearing() {   // D21: 5 seconds without auto switch
+        let keys = [VKSettings.Key.autoSwitch, VKSettings.Key.pauseAfterManual, VKSettings.Key.autoCapitalize]
+        for k in keys { VKSettings.defaults.set(true, forKey: k) }   // a saved "off" would let the test pass without the fix
+        addTeardownBlock { for k in keys { VKSettings.defaults.removeObject(forKey: k) } }
+        let (vc, p) = make(1)
+        vc.keyboard(sender, didTap: .language)   // to English by hand
+        vc.viewWillAppear(false)                 // the keyboard comes back (another field): settings are read again
+        type("vaay ", vc)
+        XCTAssertEqual(p.text, "Vaay ")
+    }
+
     func testReturnOn123StartsTheNextLineWithACapital() {
         let (vc, p) = make()
         type("hi", vc)
