@@ -216,6 +216,7 @@ class VikeyIME : InputMethodService(), KeyboardView.Listener, EmojiKeyboardView.
         readContext()
         cursorPos = if (info.initialSelStart >= 0) info.initialSelStart else -1
         recentPositions.clear()   // the last field's positions mean nothing here
+        lastCorrection = null; keepWord = null   // nor its auto-correct: Backspace here deletes, it doesn't undo an old fix
         clearWord()
         updateAutoShift(lastContext ?: "")
     }
