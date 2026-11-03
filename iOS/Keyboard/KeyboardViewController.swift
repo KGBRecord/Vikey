@@ -251,6 +251,7 @@ final class KeyboardViewController: UIInputViewController, KeyboardViewDelegate 
         lastContext = proxy.documentContextBeforeInput
         lastAfter = proxy.documentContextAfterInput ?? ""
         recentContexts = []   // the last field's states mean nothing here
+        lastCorrection = nil; keepWord = nil   // nor its auto-correct: Backspace here deletes, it doesn't undo an old fix
         clearWord()
         updateAutoShift(lastContext ?? "")
     }
