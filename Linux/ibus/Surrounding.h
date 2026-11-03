@@ -8,6 +8,9 @@ inline int surroundingDeleteCount(int n, int cursor) { return std::max(0, std::m
 // Only GNOME on Wayland needs it (mutter relays the delete). Elsewhere (X11, KDE) the app deletes on its real text,
 // which a lagging report would under-count ("dd" typed fast at the start of a field: "dđ"). The engine inherits the
 // session's environment from ibus-daemon. Arguments: XDG_SESSION_TYPE and XDG_CURRENT_DESKTOP ("ubuntu:GNOME").
+// One that's unset doesn't rule GNOME Wayland out: clamping by mistake costs a rare "dđ", not clamping a crash.
 inline bool surroundingClampNeeded(const char* sessionType, const char* desktop) {
-    return sessionType && !strcmp(sessionType, "wayland") && desktop && strstr(desktop, "GNOME");
+    bool notWayland = sessionType && *sessionType && strcmp(sessionType, "wayland");
+    bool notGnome = desktop && *desktop && !strstr(desktop, "GNOME");
+    return !notWayland && !notGnome;
 }
