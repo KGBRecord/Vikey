@@ -71,11 +71,7 @@ final class HostedWindow<Content: View> {
         guard let w = window, let host = self.host else { return }
         let measured = host.sizeThatFits(in: NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude))
         let targetWidth = size?.width ?? (measured.width > 0 ? measured.width : (w.contentLayoutRect.width > 0 ? w.contentLayoutRect.width : 460))
-        var h = height ?? host.sizeThatFits(in: NSSize(width: targetWidth, height: CGFloat.greatestFiniteMagnitude)).height
-        if let screen = w.screen ?? NSScreen.main {
-            let maxHeight = screen.visibleFrame.height - 60
-            h = min(h, maxHeight)
-        }
+        let h = height ?? host.sizeThatFits(in: NSSize(width: targetWidth, height: CGFloat.greatestFiniteMagnitude)).height
         guard h > 0, abs(h - w.contentLayoutRect.height) > 1 else { return }
         let content = NSRect(x: 0, y: 0, width: targetWidth, height: h)
         var frame = w.frame
