@@ -95,7 +95,7 @@ static void outControlKey(Uint16 key, bool shift) {
     if (!_active) return;
     flushPre();
     guint ks = _keyval ? _keyval : keysymOf(key), hw = _keyval ? _keyHw : 0; if (!ks) return;
-    guint st = _keyval ? _keyState : (shift ? IBUS_SHIFT_MASK : 0);   // the key's own modifiers: Ctrl+Enter stays Ctrl+Enter
+    guint st = _keyval ? _keyState & (IBUS_SHIFT_MASK | IBUS_LOCK_MASK | IBUS_CONTROL_MASK | IBUS_MOD1_MASK | IBUS_SUPER_MASK) : (shift ? IBUS_SHIFT_MASK : 0);   // the key's own modifiers: Ctrl+Enter stays Ctrl+Enter
     ibus_engine_forward_key_event(IBUS_ENGINE(_active), ks, hw, st); ibus_engine_forward_key_event(IBUS_ENGINE(_active), ks, hw, st | IBUS_RELEASE_MASK);
 }
 // The switch sound (Tony picked "sparkle"): two tiny notes, rising into Vietnamese, falling into English. The same
