@@ -110,8 +110,16 @@ final class KeyboardView: UIView {
     /// pill and the strip's brand on the right (kept for the render tests of the old proposals).
     static var markOn = true
     let mark = LangMarkView()
-    /// The keyboard is up: the mark plays its opening.
-    func playMarkIntro() { if Self.markOn && langTop { mark.playIntro() } }
+    /// The keyboard is up: the mark plays its opening, at most once every 10 minutes (Tony: opening the keyboard many
+    /// times in a row, switching apps, must not replay it). Saved, since iOS ends the keyboard's process often.
+    static var markIntroEvery: TimeInterval = 600
+    func playMarkIntro() {
+        guard Self.markOn && langTop else { return }
+        let key = "markIntroLast", now = Date().timeIntervalSince1970
+        guard now - UserDefaults.standard.double(forKey: key) >= Self.markIntroEvery else { return }
+        UserDefaults.standard.set(now, forKey: key)
+        mark.playIntro()
+    }
     static let pillH: CGFloat = 38
     static let barH: CGFloat = 44
     /// The corner of the glass iOS puts the keyboard in (measured, iOS 26.5: 80 px at 3x). Anything in a corner

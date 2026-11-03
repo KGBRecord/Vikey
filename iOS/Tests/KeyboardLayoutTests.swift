@@ -117,3 +117,23 @@ final class StripBrandTests: XCTestCase {
         }
     }
 }
+
+/// The corner mark's opening plays at most once every 10 minutes (Tony).
+final class MarkIntroThrottleTests: XCTestCase {
+    func testIntroAtMostEveryTenMinutes() {
+        KeyboardView.barOn = true; KeyboardView.langStyle = 1
+        let key = "markIntroLast"
+        UserDefaults.standard.removeObject(forKey: key)
+        let kb = KeyboardView(frame: CGRect(x: 0, y: 0, width: 402, height: KeyboardView.keyboardHeight(compactHeight: false)))
+        kb.layoutIfNeeded()
+        kb.playMarkIntro()
+        let first = UserDefaults.standard.double(forKey: key)
+        XCTAssertGreaterThan(first, 0, "the first opening plays")
+        kb.playMarkIntro()
+        XCTAssertEqual(UserDefaults.standard.double(forKey: key), first, "a second opening right after does not")
+        UserDefaults.standard.set(first - 601, forKey: key)
+        kb.playMarkIntro()
+        XCTAssertGreaterThan(UserDefaults.standard.double(forKey: key), first - 601, "after 10 minutes it plays again")
+        UserDefaults.standard.removeObject(forKey: key)
+    }
+}
