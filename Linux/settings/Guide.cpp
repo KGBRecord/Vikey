@@ -60,13 +60,17 @@ void refresh() {
 // Vikey (#50; ibus write-cache doesn't change that, a restart does). Restart it once if it runs but doesn't know Vikey.
 void restartIBusIfVikeyMissing() {
     static bool done = false; if (done) return; done = true;
-    gchar* argv[] = {(gchar*)"ibus", (gchar*)"list-engine", (gchar*)"--name-only", nullptr}; gchar* out = nullptr; gint status = 0;
-    if (!g_spawn_sync(nullptr, argv, nullptr, (GSpawnFlags)(G_SPAWN_SEARCH_PATH | G_SPAWN_STDERR_TO_DEV_NULL), nullptr, nullptr, &out, nullptr, &status, nullptr)) return;
-    bool known = false; gchar** lines = g_strsplit(out ? out : "", "\n", -1);
-    for (int i = 0; lines[i]; i++) if (!strcmp(g_strstrip(lines[i]), "vikey")) known = true;
-    g_strfreev(lines); g_free(out);
-    if (!g_spawn_check_wait_status(status, nullptr) || known) return;   // IBus isn't running (another input framework), or it knows Vikey
-    gchar* r[] = {(gchar*)"ibus", (gchar*)"restart", nullptr}; g_spawn_async(nullptr, r, nullptr, (GSpawnFlags)(G_SPAWN_SEARCH_PATH | G_SPAWN_STDOUT_TO_DEV_NULL | G_SPAWN_STDERR_TO_DEV_NULL), nullptr, nullptr, nullptr, nullptr);
+    GSubprocess* p = g_subprocess_new((GSubprocessFlags)(G_SUBPROCESS_FLAGS_STDOUT_PIPE | G_SUBPROCESS_FLAGS_STDERR_SILENCE), nullptr, "ibus", "list-engine", "--name-only", nullptr);
+    if (!p) return;   // no ibus command
+    g_subprocess_communicate_utf8_async(p, nullptr, nullptr, [](GObject* o, GAsyncResult* res, gpointer) {   // async: a stuck IBus can't freeze the guide
+        GSubprocess* p = G_SUBPROCESS(o); gchar* out = nullptr;
+        bool ok = g_subprocess_communicate_utf8_finish(p, res, &out, nullptr, nullptr) && g_subprocess_get_successful(p);
+        bool any = false, known = false; gchar** lines = g_strsplit(out ? out : "", "\n", -1);
+        for (int i = 0; lines[i]; i++) { const char* l = g_strstrip(lines[i]); if (*l) any = true; if (!strcmp(l, "vikey")) known = true; }
+        g_strfreev(lines); g_free(out); g_object_unref(p);
+        if (!ok || !any || known) return;   // IBus isn't running (another input framework), its list failed (empty: ibus exits 0 then), or it knows Vikey
+        gchar* r[] = {(gchar*)"ibus", (gchar*)"restart", nullptr}; g_spawn_async(nullptr, r, nullptr, (GSpawnFlags)(G_SPAWN_SEARCH_PATH | G_SPAWN_STDOUT_TO_DEV_NULL | G_SPAWN_STDERR_TO_DEV_NULL), nullptr, nullptr, nullptr, nullptr);
+    }, nullptr);
 }
 void go(Step s) {
     G.step = s; gtk_stack_set_visible_child_name(GTK_STACK(G.stack), kNames[s]); refresh();
