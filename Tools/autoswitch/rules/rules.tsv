@@ -136,6 +136,11 @@ D50	1	toans<n 	toán 	1	a tone on a letter that stays is kept
 D51	1	th{}if 	thì 	1	← then → back inside a word: the engine still knows the word ({ } = ← →)
 D51	1	tru{{}}owcs 	trước 	1	two steps away and back
 D51	0	meeting th{}if 	meeting thì 	1	English mode: the word buffer survives the round trip too, so the space still converts it
+D51	1	tu{##}ows	tuớ	1	a switch while away (# = ⌥Z, here there and back) forgets the kept word: → brings nothing back
+D51	1	tu{#@#}ows	tuớ	1	switch, click in English, switch back: → still brings nothing back
+D51	0	meeting th{@}if 	meeting thif 	0	English mode: a click while away (@) forgets the word buffer, so the space doesn't convert "thif"
+D51	0	meeting th{##}if 	meeting thif 	0	English mode: and so does a switch there and back
+D51	0	meeting th{x<}if 	meeting thif 	0	English mode: so does a key typed while away, even if deleted again
 D52	1	wr -	ử -	1	a hyphen after a space is not part of the word before it (gave "wr wr-")
 D52	1	ab isw	ab iứ	1	the tone moving onto a just-added ư deletes only the letters of the word (the space before it stayed; gave "abiứ")
 D52	1	ab irw	ab iử	1	the same with hỏi
