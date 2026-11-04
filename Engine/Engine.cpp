@@ -2166,8 +2166,9 @@ void vKeyHandleEvent(const vKeyEvent& event,
             hCode = vDoNothing;
             _spaceCount++;
         }
-        //look-back memory: only words separated by a single space count
-        if (hCode == vDoNothing && _spaceCount == 1) asRememberWord(); else if (_spaceCount > 1) _asPrevCount = 0;
+        //look-back memory: only words separated by a single space count. A word put back as typed ("tooib") isn't
+        //remembered, so it ends the history: else look-back takes the word before it as adjacent ("thí tothis makes")
+        if (hCode == vDoNothing && _spaceCount == 1) asRememberWord(); else _asPrevCount = 0;
         //save word
         if (_spaceCount == 1) {
             if (_specialChar.size() > 0) {
