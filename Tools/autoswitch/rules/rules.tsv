@@ -48,6 +48,8 @@ D8.1	0	check mail cos theer 	check mail có thể 	1	look-back the other way: co
 D8.1	0	nos theer 	nó thể 	1	look-back the other way: nos -> nó
 D8.1	0	cors gif 	có gì 	1	look-back: the common Vietnamese phrase wins
 D8.1	1	carm own 	cảm ơn 	1	EN start: carm converts, then own types ơn
+D8.1	1	this tooib makes 	thí tooib makes 	1	look-back stops at a word put back as typed: tooib is not ambiguous, so thí is not next to makes
+D8.1	1	last tooib week 	lát tooib week 	0	same when the later word switches by itself: week must not delete through tooib
 D8.2	1	cais testflight build 	cái testflight build 	0	unknown foreign word (not Vietnamese, not in the English list) restores + English
 D8.2	1	analytics dashboard 	analytics dashboard 	0	unknown foreign word restores
 D8.2	1	getSmartSwitchKeySaveDataFromApp 	getSmartSwitchKeySaveDataFromApp 	0	32 keys, the most the engine keeps: still restores
