@@ -5,7 +5,7 @@ installed, the Vikey IME selected, and the app's main screen open (the "Try the 
 Exit code = number of failures."""
 import subprocess, sys, os, re, time, html
 sys.path.insert(0, os.path.dirname(__file__))
-from tap_type import type_text, sh, ime_top, layout
+from tap_type import type_text, sh, ime_top, layout, DENS
 CASES = os.path.join(os.path.dirname(__file__), "..", "..", "Windows", "Tests", "cases.tsv")
 FIELD_Y = None
 
@@ -26,13 +26,22 @@ def clear_field():
     sh("input keyevent " + " ".join(["112"] * 40) + "; input keyevent " + " ".join(["67"] * 80))   # forward-delete, then delete
     time.sleep(0.4)
 
+def bars_top(top):
+    """Screen y where the lowest bottom bar starts: the system nav bar, or the IME's own back/switcher strip (gesture nav)."""
+    tops = [int(t) for t in re.findall(r"type=navigationBars frame=\[\d+,(\d+)\]\S* [^\n]*sideHint=BOTTOM", sh("dumpsys window"))]
+    m = re.search(r"mNavigationBarFrame=\S+ \S+ \S+ \d+,(\d+)-", sh("dumpsys input_method"))   # in the IME window's coordinates
+    return min(tops + ([top + int(m.group(1))] if m else []), default=1 << 30)   # none: nothing to overlap
+
 def main():
     fx, fy = find_field()
     sh("input tap %d %d" % (fx, fy)); time.sleep(1)
     sh("am broadcast -a app.vikey.DEBUG -p app.vikey --ez autocap false >/dev/null"); time.sleep(0.8)
     sh("input tap %d %d" % (fx, fy)); time.sleep(0.6)
     top = ime_top(); L = layout()
-    fails = 0; total = 0
+    fails = 0; total = 1
+    clear = top + L[" "][1] + 43 / 2 * DENS <= bars_top(top)   # the bottom row's lower edge (keyH 43 dp)
+    if not clear: fails += 1
+    print("%-4s %-28s" % ("ok" if clear else "FAIL", "bottom row above the nav bar"))
     for line in open(CASES, encoding="utf-8"):
         if line.startswith("#") or not line.strip(): continue
         name, start, keys, expected = line.rstrip("\n").split("\t")[:4]
