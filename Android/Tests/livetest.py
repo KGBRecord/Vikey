@@ -29,11 +29,12 @@ def clear_field():
 def bars_top(top):
     """Screen y where the lowest bottom bar starts: the system nav bar, or the IME's own back/switcher strip (gesture nav).
     None when dumpsys shows no nav bar at all: nothing to check against."""
-    frames = re.findall(r"type=navigationBars frame=\[\d+,(\d+)\]\[\d+,(\d+)\]", sh("dumpsys window"))   # Android 14 has no sideHint
-    if not frames: return None
+    frames = re.findall(r"type=(?:navigationBars|ITYPE_NAVIGATION_BAR) frame=\[\d+,(\d+)\]\[\d+,(\d+)\]", sh("dumpsys window"))   # ITYPE_ up to Android 13; no sideHint before 15
     tops = [int(t) for t, b in frames if int(t) > int(b) / 2]   # a bottom bar starts below the middle; a side bar starts at 0
     m = re.search(r"mNavigationBarFrame=\S+ \S+ \S+ \d+,(\d+)-", sh("dumpsys input_method"))   # in the IME window's coordinates
-    return min(tops + ([top + int(m.group(1))] if m else []), default=1 << 30)   # none: nothing to overlap
+    if m: tops.append(top + int(m.group(1)))
+    if not frames and not m: return None
+    return min(tops, default=1 << 30)   # only side bars: nothing to overlap
 
 def main():
     fx, fy = find_field()
