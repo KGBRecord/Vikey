@@ -1322,6 +1322,7 @@ static Uint32 _asConverted[MAX_BUFF]; static int _asConvertedN = 0;   //the word
 void vAutoSwitchForget() {
     _asPrevCount = 0;
     _asWordStartOk = true;   //a fresh context (language switched, app changed): the next word stands on its own
+    _afterDigit = false;     //not after a digit either: the one before the switch may be far back ("1" ⌥Z "abc " ⌥Z "wa" gave "wa", D33)
     _spaceCount = 0; _specialChar.clear(); _typingStates.clear();   //and Backspace can't reopen a word from before it
     if (_asConvertedN > 0) {   //except the word auto switch just turned Vietnamese: it is on screen before the break key,
         //so Backspace over that key reopens it like a word typed in Vietnamese ("treen " ⌫ + s -> "trến")
