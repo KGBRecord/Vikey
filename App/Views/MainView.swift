@@ -66,7 +66,7 @@ struct MainView: View {
             .scrollDisabled(true)
             .padding(.bottom, 8)
         }
-        .frame(width: 460)
+        .frame(maxWidth: 460)   // an always-shown scroller (System Settings) takes its width from the page, not past the window's edge
         .fixedSize(horizontal: false, vertical: true)
         .background(
             GeometryReader { geo in
