@@ -408,7 +408,8 @@ void insertKey(const Uint16& keyCode, const bool& isCaps, const bool& isCheckSpe
  *  ("có" ⌫ o gave "coo", D50). */
 static bool asResyncStates() {   //false: the keys couldn't be rebuilt for the whole word
     static const Uint16 toneKeys[5] = {KEY_S, KEY_F, KEY_R, KEY_X, KEY_J};
-    Uint32 tone = 0; int n = 0, x = 0;
+    Uint32 tone = 0, up = _index > 1 ? CAPS_MASK : 0; int n = 0, x = 0;   //a lone capital was likely Shift: "Oof" stays "Oof"
+    for (int y = 0; y < _index; y++) up &= TypingWord[y];   //an all-caps word (Caps Lock): its vowel and tone keys were capitals too ("VIEEJT" gave "VIEeTj")
     for (; x < _index && n < MAX_BUFF - 3; x++) {
         Uint32 c = TypingWord[x];
         if (c & CHAR_CODE_MASK) return false;              //a character the keys can't rebuild: leave the list alone
@@ -416,14 +417,14 @@ static bool asResyncStates() {   //false: the keys couldn't be rebuilt for the w
         if ((c & STANDALONE_MASK) && (c & TONEW_MASK)) { KeyStates[n++] = KEY_W | caps; }
         else {
             KeyStates[n++] = CHR(x) | caps;
-            if (c & TONE_MASK) KeyStates[n++] = CHR(x);     //â ê ô đ: the letter twice
-            if (c & TONEW_MASK) KeyStates[n++] = KEY_W;     //ă ơ ư
+            if (c & TONE_MASK) KeyStates[n++] = CHR(x) | up;     //â ê ô đ: the letter twice
+            if (c & TONEW_MASK) KeyStates[n++] = KEY_W | up;     //ă ơ ư
         }
         if (c & MARK_MASK) tone = c & MARK_MASK;
     }
     if (tone) {
         int m = tone == MARK1_MASK ? 0 : tone == MARK2_MASK ? 1 : tone == MARK3_MASK ? 2 : tone == MARK4_MASK ? 3 : 4;
-        KeyStates[n++] = toneKeys[m];
+        KeyStates[n++] = toneKeys[m] | up;
     }
     _stateIndex = n;
     _asDropN = 0;
