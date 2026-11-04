@@ -216,8 +216,9 @@ class VikeyIME : InputMethodService(), KeyboardView.Listener, EmojiKeyboardView.
             driver.language = 0
         } else fieldLanguage?.let { driver.language = it; fieldLanguage = null }
         readContext()
-        cursorPos = if (info.initialSelStart >= 0) minOf(info.initialSelStart, info.initialSelEnd) else -1
-        selLength = if (info.initialSelStart >= 0) abs(info.initialSelEnd - info.initialSelStart) else 0   // start > end when selected backwards
+        val known = info.initialSelStart >= 0 && info.initialSelEnd >= 0   // -1 when the editor doesn't know
+        cursorPos = if (known) minOf(info.initialSelStart, info.initialSelEnd) else -1
+        selLength = if (known) abs(info.initialSelEnd - info.initialSelStart) else 0   // start > end when selected backwards
         recentPositions.clear()   // the last field's positions mean nothing here
         clearWord()
         updateAutoShift(lastContext ?: "")
@@ -372,7 +373,7 @@ class VikeyIME : InputMethodService(), KeyboardView.Listener, EmojiKeyboardView.
         val c = ic ?: return
         val pos = if (cursorPos >= 0) cursorPos else (c.getTextBeforeCursor(4000, 0)?.length ?: return)
         val np = maxOf(0, pos + by)
-        c.setSelection(np, np); cursorPos = np
+        c.setSelection(np, np); cursorPos = np; selLength = 0
     }
 
     override fun keyboardCursorModeEnded() {
