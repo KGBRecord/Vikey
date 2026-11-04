@@ -125,6 +125,7 @@ static void ApplySmartSwitch() {
 void focusChanged(const std::string& app) {
     if (!app.empty()) _frontApp = app;
     ResetEnglishWord(true); _autoFixUndo.active = false;
+    _flag &= F_CAPS; _lastFlag = 0; _modifierChordUsed = false;   // after Alt+Tab the modifier releases went to the other app
     TLEndWord("app"); _tlApp = _frontApp;
     if (vUseSmartSwitchKey) ApplySmartSwitch();
     startNewSession();
