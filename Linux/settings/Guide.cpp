@@ -56,8 +56,21 @@ void refresh() {
     bool beep = (currentHotkey() & 0x8000) != 0; if (gtk_switch_get_active(GTK_SWITCH(G.beepSw)) != beep) gtk_switch_set_active(GTK_SWITCH(G.beepSw), beep);
     gtk_widget_set_visible(G.emojiBox, emojiOn); gtk_widget_set_visible(G.emojiHint, emojiOn && emojiKey == 0);
 }
+// A running IBus lists only the engines it found when it started, so right after the install Settings can't offer
+// Vikey (#50; ibus write-cache doesn't change that, a restart does). Restart it once if it runs but doesn't know Vikey.
+void restartIBusIfVikeyMissing() {
+    static bool done = false; if (done) return; done = true;
+    gchar* argv[] = {(gchar*)"ibus", (gchar*)"list-engine", (gchar*)"--name-only", nullptr}; gchar* out = nullptr; gint status = 0;
+    if (!g_spawn_sync(nullptr, argv, nullptr, (GSpawnFlags)(G_SPAWN_SEARCH_PATH | G_SPAWN_STDERR_TO_DEV_NULL), nullptr, nullptr, &out, nullptr, &status, nullptr)) return;
+    bool known = false; gchar** lines = g_strsplit(out ? out : "", "\n", -1);
+    for (int i = 0; lines[i]; i++) if (!strcmp(g_strstrip(lines[i]), "vikey")) known = true;
+    g_strfreev(lines); g_free(out);
+    if (!g_spawn_check_wait_status(status, nullptr) || known) return;   // IBus isn't running (another input framework), or it knows Vikey
+    gchar* r[] = {(gchar*)"ibus", (gchar*)"restart", nullptr}; g_spawn_async(nullptr, r, nullptr, (GSpawnFlags)(G_SPAWN_SEARCH_PATH | G_SPAWN_STDOUT_TO_DEV_NULL | G_SPAWN_STDERR_TO_DEV_NULL), nullptr, nullptr, nullptr, nullptr);
+}
 void go(Step s) {
     G.step = s; gtk_stack_set_visible_child_name(GTK_STACK(G.stack), kNames[s]); refresh();
+    if (s == SETUP) restartIBusIfVikeyMissing();
     if (s == PRACTICE) g_timeout_add(200, [](gpointer) -> gboolean { gtk_widget_grab_focus(G.entries[0]); return FALSE; }, nullptr);
 }
 void stopTimer() { if (G.tick) { g_source_remove(G.tick); G.tick = 0; } }
