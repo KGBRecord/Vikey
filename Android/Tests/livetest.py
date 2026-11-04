@@ -27,8 +27,11 @@ def clear_field():
     time.sleep(0.4)
 
 def bars_top(top):
-    """Screen y where the lowest bottom bar starts: the system nav bar, or the IME's own back/switcher strip (gesture nav)."""
-    tops = [int(t) for t in re.findall(r"type=navigationBars frame=\[\d+,(\d+)\]\S* [^\n]*sideHint=BOTTOM", sh("dumpsys window"))]
+    """Screen y where the lowest bottom bar starts: the system nav bar, or the IME's own back/switcher strip (gesture nav).
+    None when dumpsys shows no nav bar at all: nothing to check against."""
+    frames = re.findall(r"type=navigationBars frame=\[\d+,(\d+)\]\[\d+,(\d+)\]", sh("dumpsys window"))   # Android 14 has no sideHint
+    if not frames: return None
+    tops = [int(t) for t, b in frames if int(t) > int(b) / 2]   # a bottom bar starts below the middle; a side bar starts at 0
     m = re.search(r"mNavigationBarFrame=\S+ \S+ \S+ \d+,(\d+)-", sh("dumpsys input_method"))   # in the IME window's coordinates
     return min(tops + ([top + int(m.group(1))] if m else []), default=1 << 30)   # none: nothing to overlap
 
@@ -38,10 +41,10 @@ def main():
     sh("am broadcast -a app.vikey.DEBUG -p app.vikey --ez autocap false >/dev/null"); time.sleep(0.8)
     sh("input tap %d %d" % (fx, fy)); time.sleep(0.6)
     top = ime_top(); L = layout()
-    fails = 0; total = 1
-    clear = top + L[" "][1] + 43 / 2 * DENS <= bars_top(top)   # the bottom row's lower edge (keyH 43 dp)
-    if not clear: fails += 1
-    print("%-4s %-28s" % ("ok" if clear else "FAIL", "bottom row above the nav bar"))
+    fails = 0; total = 0; bars = bars_top(top)
+    clear = None if bars is None else top + L[" "][1] + 43 / 2 * DENS <= bars   # the bottom row's lower edge (keyH 43 dp)
+    if clear is not None: total += 1; fails += not clear
+    print("%-4s %-28s" % ({None: "skip", True: "ok", False: "FAIL"}[clear], "bottom row above the nav bar"))
     for line in open(CASES, encoding="utf-8"):
         if line.startswith("#") or not line.strip(): continue
         name, start, keys, expected = line.rstrip("\n").split("\t")[:4]
