@@ -41,8 +41,8 @@ def main():
     sh("input tap %d %d" % (fx, fy)); time.sleep(1)
     sh("am broadcast -a app.vikey.DEBUG -p app.vikey --ez autocap false >/dev/null"); time.sleep(0.8)
     sh("input tap %d %d" % (fx, fy)); time.sleep(0.6)
-    top = ime_top(); L = layout()
-    fails = 0; total = 0; bars = bars_top(top)
+    found = ime_top(None); top = ime_top() if found is None else found; L = layout()
+    fails = 0; total = 0; bars = None if found is None else bars_top(top)   # no IME frame: the typing fallback is no origin to check the bars against
     clear = None if bars is None else top + L[" "][1] + 43 / 2 * DENS <= bars   # the bottom row's lower edge (keyH 43 dp)
     if clear is not None: total += 1; fails += not clear
     print("%-4s %-28s" % ({None: "skip", True: "ok", False: "FAIL"}[clear], "bottom row above the nav bar"))
