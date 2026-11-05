@@ -1319,8 +1319,10 @@ struct AsWord {
 static AsWord _asPrev[AS_LOOKBACK_WORDS];
 static int _asPrevCount = 0;
 static Uint32 _asConverted[MAX_BUFF]; static int _asConvertedN = 0;   //the word auto switch just put in Vietnamese
+static void navForget();
 
 void vAutoSwitchForget() {
+    navForget();   //and the word kept for a ← → round trip (D51): after a switch or a click → would bring it back elsewhere
     _asPrevCount = 0;
     _asWordStartOk = true;   //a fresh context (language switched, app changed): the next word stands on its own
     _afterDigit = false;     //not after a digit either: the one before the switch may be far back ("1" ⌥Z "abc " ⌥Z "wa" gave "wa", D33)
