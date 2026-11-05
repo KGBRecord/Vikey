@@ -53,7 +53,7 @@ static HWINEVENTHOOK _focusHook = nullptr, _fgHook = nullptr;
 static vKeyHookState* pData = nullptr;
 static unsigned _flag = 0, _lastFlag = 0;
 static bool _modifierChordUsed = false;   // the modifiers held went with a click or another key: no modifier-only hotkey until all are released
-static DWORD _hotkeyVk = 0;               // the hotkey's key while it is down: the LL hook has no repeat flag, so key-downs before its key-up are auto-repeat
+static DWORD _hotkeyVk = 0;               // the hotkey's key while it is down (with or without its modifiers): the LL hook has no repeat flag, so key-downs before its key-up are auto-repeat
 static Uint16 _keycode = 0;
 static DWORD _keyVk = 0, _keyExtended = 0;   // the key as Windows sent it: re-sent as is after a restore (Home, numpad 1...)
 static bool _hasJustUsedHotKey = false;
@@ -566,9 +566,12 @@ static LRESULT CALLBACK keyboardHook(int nCode, WPARAM wParam, LPARAM lParam) {
 
     // switch language hotkey
     if (GET_SWITCH_KEY(vSwitchKeyStatus) != _keycode) { cancelModifierHotkey(); _hotkeyVk = 0; }
-    else if (checkHotKey(vSwitchKeyStatus, _flag, GET_SWITCH_KEY(vSwitchKeyStatus) != 0xFE)) {
-        if (k->vkCode == _hotkeyVk) return 1;   // holding Alt+Z: switch once per press, swallow the auto-repeat
-        switchLanguage("hotkey"); _lastFlag = 0; _hasJustUsedHotKey = true; _hotkeyVk = k->vkCode; return 1;
+    else {
+        bool repeat = k->vkCode == _hotkeyVk; _hotkeyVk = k->vkCode;   // any press, matched or not: Alt+Shift+Z, then Shift up, mustn't switch on a repeat (the Mac's autorepeat flag)
+        if (checkHotKey(vSwitchKeyStatus, _flag, GET_SWITCH_KEY(vSwitchKeyStatus) != 0xFE)) {
+            if (repeat) return 1;   // holding Alt+Z: switch once per press, swallow the auto-repeat
+            switchLanguage("hotkey"); _lastFlag = 0; _hasJustUsedHotKey = true; return 1;
+        }
     }
     _hasJustUsedHotKey = _lastFlag != 0;
 

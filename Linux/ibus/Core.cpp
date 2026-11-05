@@ -20,7 +20,7 @@ static Output _out;
 static vKeyHookState* pData = nullptr;
 static unsigned _flag = 0, _lastFlag = 0;
 static bool _modifierChordUsed = false;   // the modifiers held went with a click or another key: no modifier-only hotkey until all are released
-static bool _hotkeyHeld = false;   // the switch hotkey's key is down: IBus has no repeat flag, so presses before its release are auto-repeat; a click or focus_out clears it (a missed release)
+static bool _hotkeyHeld = false;   // the switch hotkey's key is down (with or without its modifiers): IBus has no repeat flag, so presses before its release are auto-repeat; a click or focus_out clears it (a missed release)
 static Uint16 _keycode = 0;
 static std::function<void(int)> _observer;
 static std::string _frontApp = "UnknownApp";
@@ -335,9 +335,12 @@ bool keyDown(Uint16 key, bool shift, unsigned flags) {
     if (vEmojiHotkey && GET_SWITCH_KEY(vEmojiHotkey) == _keycode && HAS_CONTROL(vEmojiHotkey) == GET_BOOL(_flag & F_CONTROL) && HAS_OPTION(vEmojiHotkey) == GET_BOOL(_flag & F_ALT) &&
         HAS_COMMAND(vEmojiHotkey) == GET_BOOL(_flag & F_WIN) && HAS_SHIFT(vEmojiHotkey) == GET_BOOL(_flag & F_SHIFT)) { cancelModifierHotkey(); if (_out.openEmoji) _out.openEmoji(); return true; }
     if (GET_SWITCH_KEY(vSwitchKeyStatus) != _keycode) otherKeyDown();
-    else if (checkHotKey(vSwitchKeyStatus, flags)) {   // flags, not _flag: Caps Lock's uppercase keysym isn't Shift
-        if (_hotkeyHeld) return true;   // holding Alt+Z: switch once per press, swallow the auto-repeat
-        toggleLanguage("hotkey"); _lastFlag = 0; _hotkeyHeld = true; return true;
+    else {
+        bool repeat = _hotkeyHeld; _hotkeyHeld = true;   // any press, matched or not: Alt+Shift+Z, then Shift up, mustn't switch on a repeat (the Mac's autorepeat flag)
+        if (checkHotKey(vSwitchKeyStatus, flags)) {   // flags, not _flag: Caps Lock's uppercase keysym isn't Shift
+            if (repeat) return true;   // holding Alt+Z: switch once per press, swallow the auto-repeat
+            toggleLanguage("hotkey"); _lastFlag = 0; return true;
+        }
     }
     if (_keycode == KEY_DELETE && _autoFixUndo.active && !(OTHER_CONTROL_KEY)) { if (UndoAutoFixWithBackspace()) return true; }
     _autoFixUndo.active = false;
