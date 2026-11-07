@@ -1654,8 +1654,8 @@ static bool asHasSeparatedVowels(const Uint32* keys, int count) {
     return false;
 }
 
+// Classify an unlisted literal only after excluding explicit Telex modifiers.
 static bool asHasLiteralWordShape(const Uint32* keys, int count) {
-    if (asHasInternalCapital(keys, count)) return true;
     // Explicit Telex modifiers remain evidence for an unlisted Vietnamese
     // syllable or a Vietnamese typo, even with a late modifier ("mawca").
     for (int i = 1; i < count; ++i) {
@@ -1663,7 +1663,7 @@ static bool asHasLiteralWordShape(const Uint32* keys, int count) {
         if (c == 'w' || (c == previous && (c == 'a' || c == 'e' || c == 'o' || c == 'd')))
             return false;
     }
-    return asHasSeparatedVowels(keys, count);
+    return asHasInternalCapital(keys, count) || asHasSeparatedVowels(keys, count);
 }
 
 static bool asShouldRestoreToEnglishCore(bool& literalOnly) {
@@ -2387,9 +2387,12 @@ bool vAutoSwitchFixDoubledKey(const Uint32* keys, const int& count) {
     if (_asDoubleBoth && !enFull && enSingle) { fixed = single; fixedCount = m; }            //"mixx" -> "mix"
     else if (!_asDoubleBoth &&
              (enFull || (!enSingle && (!asFewCapitals(full, total) ||
+                                       asHasInternalCapital(full, total) ||
                                        asHasLiteralWordShape(full, total))))) {
         // Keep a recognized literal even when deleting the key also spells
         // an English word. For unknown words require structural evidence.
+        // This path already undid a doubled key into English; retain case
+        // evidence here even when the identifier also contains a Telex key.
         fixed = full;
         fixedCount = total;
     }

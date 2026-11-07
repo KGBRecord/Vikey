@@ -185,3 +185,6 @@ OOV-LITERAL	1	hopoj 	hộp 	1	late circumflex modifier
 OOV-LITERAL	1	been Momo 	bên Momo 	0	a new literal name cannot justify rewriting the preceding Vietnamese word
 OOV-LITERAL	1	cuar Sapa 	của Sapa 	0	restore an unknown name without changing the preceding word
 OOV-LITERAL	1	This Samsung TV 	This Samsung TV 	0	keep existing lookback when spelling already provides English evidence
+OOV-LITERAL	1	buwowNg 	bươNg 	1	internal capitals must not bypass an explicit Telex w modifier
+OOV-LITERAL	1	rieeTj 	riệT 	1	internal capitals must not bypass a doubled vowel modifier
+D19	1	currentWindow 	currentWindow 	0	doubled-key literal restoration still accepts an internal capital with w
