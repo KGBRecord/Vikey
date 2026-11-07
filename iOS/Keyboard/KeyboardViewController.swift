@@ -721,6 +721,7 @@ final class KeyboardViewController: UIInputViewController, KeyboardViewDelegate 
         case .alternative: replaceSelection(with: cell.text); return
         case .undo: undoProofread(); return
         case .busy: return
+        case .nudge: return   // a prototype: no action yet
         case .word: break
         }
         lastCorrection = nil

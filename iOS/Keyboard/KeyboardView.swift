@@ -800,17 +800,23 @@ final class AlternatesView: UIView {
 
 /// One cell of the suggestion strip.
 struct Suggestion: Equatable {
-    enum Kind: Equatable { case word, next, proofread, alternative, undo, busy }
+    enum Kind: Equatable { case word, next, proofread, alternative, undo, busy, nudge }
     var text: String
     var quoted = false        // the word as typed, when something else is offered
     var highlighted = false   // what the space bar will put in (auto-correct)
-    var kind: Kind = .word    // next word, ✨ proofread, another word for a selection, undo, or a "working…" note
+    var kind: Kind = .word    // next word, ✨ proofread, another word for a selection, undo, or a "working…" note, or a nudge
+    /// A nudge's action, after its text ("Đánh giá", "Báo lỗi"), and its symbol (SF Symbol).
+    var action: String? = nil
+    var symbol: String? = nil
 }
 
 /// The strip above the keys: up to three words, like the system keyboard's.
 final class SuggestionBar: UIView {
     var onPick: ((Int) -> Void)?
     var onBrand: (() -> Void)?
+    /// A nudge's ✕: not now.
+    var onDismissNudge: (() -> Void)?
+    private let close = UIButton(type: .system)
     var dark = false { didSet { if dark != oldValue { restyle() } } }
     private var cells: [UIButton] = []
     private var lines: [UIView] = []
@@ -847,11 +853,17 @@ final class SuggestionBar: UIView {
             addSubview(b); cells.append(b)
         }
         for _ in 0..<2 { let l = UIView(); addSubview(l); lines.append(l) }
+        close.setImage(UIImage(systemName: "xmark", withConfiguration: UIImage.SymbolConfiguration(pointSize: 12, weight: .semibold)), for: .normal)
+        close.accessibilityLabel = "Không phải bây giờ"
+        close.addTarget(self, action: #selector(tapClose), for: .touchUpInside)
+        addSubview(close)
         restyle()
     }
     required init?(coder: NSCoder) { fatalError() }
 
     @objc private func tapBrand() { onBrand?() }
+    @objc private func tapClose() { onDismissNudge?() }
+    private var nudge: Suggestion? { items.count == 1 && items[0].kind == .nudge ? items[0] : nil }
 
     @objc private func tap(_ b: UIButton) { if b.tag < items.count { onPick?(b.tag) } }
 
@@ -865,6 +877,8 @@ final class SuggestionBar: UIView {
         word.append(NSAttributedString(string: "key", attributes: [.font: UIFont.systemFont(ofSize: 15, weight: .bold), .foregroundColor: indigo]))
         markText.attributedText = word
         mark.isHidden = !items.isEmpty || !showsBrand   // only on an empty strip
+        close.isHidden = nudge == nil
+        close.tintColor = fg.withAlphaComponent(0.45)
         for (i, b) in cells.enumerated() {
             let it = i < items.count ? items[i] : nil
             let title: String? = it.map {
@@ -875,6 +889,30 @@ final class SuggestionBar: UIView {
                 }
             }
             b.setTitle(title, for: .normal)
+            // A nudge: its words quiet, its action in the brand's colour, the symbol before it.
+            if let it, it.kind == .nudge {
+                let brandC: UIColor = dark ? UIColor(red: 0.62, green: 0.60, blue: 1, alpha: 1) : UIColor(red: 0.31, green: 0.27, blue: 0.90, alpha: 1)
+                let t = NSMutableAttributedString(string: it.text, attributes: [.font: UIFont.systemFont(ofSize: 15), .foregroundColor: fg.withAlphaComponent(0.72)])
+                if let a = it.action {
+                    t.append(NSAttributedString(string: "   ", attributes: [.font: UIFont.systemFont(ofSize: 15)]))
+                    if let sym = it.symbol, let img = UIImage(systemName: sym, withConfiguration: UIImage.SymbolConfiguration(pointSize: 13, weight: .semibold))?.withTintColor(brandC, renderingMode: .alwaysOriginal) {
+                        t.append(NSAttributedString(attachment: NSTextAttachment(image: img)))
+                        t.append(NSAttributedString(string: " ", attributes: [.font: UIFont.systemFont(ofSize: 15)]))
+                    }
+                    t.append(NSAttributedString(string: a, attributes: [.font: UIFont.systemFont(ofSize: 15, weight: .semibold), .foregroundColor: brandC]))
+                }
+                b.setAttributedTitle(t, for: .normal)
+                b.contentHorizontalAlignment = .left
+                b.contentEdgeInsets = UIEdgeInsets(top: 0, left: 14, bottom: 0, right: 10)
+                b.titleLabel?.lineBreakMode = .byTruncatingTail
+                b.backgroundColor = dark ? UIColor(white: 1, alpha: 0.08) : UIColor(white: 1, alpha: 0.55)
+                b.isEnabled = true
+                continue
+            }
+            b.setAttributedTitle(nil, for: .normal)
+            b.contentHorizontalAlignment = .center
+            b.contentEdgeInsets = .zero
+            b.titleLabel?.lineBreakMode = .byTruncatingMiddle
             let brand: UIColor = dark ? UIColor(red: 0.62, green: 0.60, blue: 1, alpha: 1) : UIColor(red: 0.31, green: 0.27, blue: 0.90, alpha: 1)
             b.setTitleColor(it?.kind == .busy ? fg.withAlphaComponent(0.45) : it?.kind == .proofread || it?.kind == .undo ? brand : fg, for: .normal)
             b.titleLabel?.font = .systemFont(ofSize: 17, weight: it?.kind == .proofread ? .semibold : .regular)
@@ -896,6 +934,16 @@ final class SuggestionBar: UIView {
         mark.frame = CGRect(x: bounds.width - 14 - mw, y: (bounds.height - iconSide) / 2, width: mw, height: iconSide)
         markIcon.frame = CGRect(x: 0, y: 0, width: iconSide, height: iconSide)
         markText.frame = CGRect(x: iconSide + gap, y: (iconSide - markText.bounds.height) / 2, width: markText.bounds.width, height: markText.bounds.height)
+        // a nudge: one wide cell, its ✕ on the right where the brand would be
+        if let _ = nudge {
+            let cw: CGFloat = 36
+            close.frame = CGRect(x: bounds.width - cw - 4, y: 2, width: cw, height: bounds.height - 4)
+            cells[0].frame = CGRect(x: 4, y: 3, width: bounds.width - cw - 12, height: bounds.height - 6)
+            cells[0].layer.cornerRadius = cells[0].bounds.height / 2
+            for b in cells.dropFirst() { b.frame = .zero }
+            lines.forEach { $0.isHidden = true }
+            return
+        }
         // one wide cell for a single action (✨ Proofread, ↩︎ Undo, "working…"); three otherwise
         if items.count == 1, items[0].kind != .word, items[0].kind != .next {
             cells[0].frame = bounds.insetBy(dx: 2, dy: 2)
@@ -903,6 +951,7 @@ final class SuggestionBar: UIView {
             lines.forEach { $0.isHidden = true }
             return
         }
+        cells[0].layer.cornerRadius = 8
         let w = bounds.width / 3
         for (i, b) in cells.enumerated() { b.frame = CGRect(x: CGFloat(i) * w + 2, y: 2, width: w - 4, height: bounds.height - 4) }
         for (i, l) in lines.enumerated() { l.frame = CGRect(x: CGFloat(i + 1) * w - 0.5, y: bounds.height * 0.28, width: 1, height: bounds.height * 0.44) }
