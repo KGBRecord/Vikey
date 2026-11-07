@@ -82,6 +82,8 @@ final class KeyboardView: UIView {
     /// Taken (set to nil) by the controller; nil when a key wasn't typed by a touch.
     var lastTapPoint: CGPoint?
     let bar = SuggestionBar()
+    /// A nudge's button (true) or its ✕ (false), for Nudges.
+    var onNudge: ((NudgeView.Kind, Bool) -> Void)?
     var suggestions: [Suggestion] = [] { didSet { if suggestions != oldValue { bar.show(suggestions) } } }
 
     private var keys: [(def: KeyDef, view: KeyCap)] = []
@@ -209,7 +211,8 @@ final class KeyboardView: UIView {
         bar.onPick = { [unowned self] i in self.delegate?.keyboard(self, pickSuggestion: i) }
         bar.onBrand = { [unowned self] in self.openVikeyApp() }
         // A nudge's button opens the app where it acts: Apple's review sheet, or the feedback form.
-        bar.onNudge = { [unowned self] k in self.bar.hideNudge(); self.openVikeyApp(k == .review ? "review" : "feedback") }
+        bar.onNudge = { [unowned self] k in self.onNudge?(k, true); self.bar.hideNudge(); self.openVikeyApp(k == .review ? "review" : "feedback") }
+        bar.onNudgeClosed = { [unowned self] k in self.onNudge?(k, false) }
         addSubview(mark)
         addSubview(popup); popup.isHidden = true
         addSubview(alternates); alternates.isHidden = true

@@ -179,3 +179,67 @@ final class NudgeRenderTests: XCTestCase {
         }
     }
 }
+
+/// When the nudges show (Nudges.swift), on a clock the test moves.
+final class NudgesTests: XCTestCase {
+    private var t = Date(timeIntervalSince1970: 1_800_000_000)
+    private func make() -> Nudges {
+        let d = UserDefaults(suiteName: "nudges-test-\(UUID().uuidString)")!
+        return Nudges(defaults: d, clock: { [unowned self] in self.t })
+    }
+    func testReviewAfter100CleanSwitches() {
+        let n = make()
+        for _ in 0..<99 { n.autoSwitched() }
+        XCTAssertNil(n.due())
+        n.autoSwitched()
+        XCTAssertEqual(n.due(), .review)
+        n.shown(.review)
+        XCTAssertNil(n.due(), "once a day at most")
+        t += 86401
+        XCTAssertEqual(n.due(), .review)
+        n.closed(.review)
+        t += 86401
+        XCTAssertNil(n.due(), "✕: again at 500")
+        for _ in 0..<400 { n.autoSwitched() }
+        XCTAssertEqual(n.due(), .review)
+        n.acted(.review)
+        t += 86401
+        XCTAssertNil(n.due(), "rated: never again")
+    }
+    func testNoReviewRightAfterAnUndo() {
+        let n = make()
+        for _ in 0..<95 { n.autoSwitched() }
+        n.undone()
+        for _ in 0..<10 { n.autoSwitched() }
+        XCTAssertNil(n.due(), "an undo in the last 20 switches")
+        for _ in 0..<10 { n.autoSwitched() }
+        XCTAssertEqual(n.due(), .review)
+    }
+    func testBugAfterTheSecondUndoInADay() {
+        let n = make()
+        n.undone()
+        XCTAssertNil(n.due(afterUndo: true))
+        n.undone()
+        XCTAssertEqual(n.due(afterUndo: true), .bug)
+        XCTAssertNil(n.due(), "only right after an undo")
+        n.shown(.bug)
+        n.undone()
+        XCTAssertNil(n.due(afterUndo: true), "once a day")
+        t += 86401; n.undone(); n.undone()
+        XCTAssertEqual(n.due(afterUndo: true), .bug)
+        n.closed(.bug)
+        t += 86401; n.undone(); n.undone()
+        XCTAssertNil(n.due(afterUndo: true), "✕: 2 weeks")
+        t += 14 * 86400; n.undone(); n.undone()
+        XCTAssertEqual(n.due(afterUndo: true), .bug)
+    }
+    func testManualSwitchRightAfterAnAutoOneIsAnUndo() {
+        let n = make()
+        n.autoSwitched(); t += 2; n.manualSwitch()
+        n.autoSwitched(); t += 2; n.manualSwitch()
+        XCTAssertEqual(n.due(afterUndo: true), .bug)
+        let m = make()
+        m.autoSwitched(); t += 10; m.manualSwitch(); m.manualSwitch()
+        XCTAssertNil(m.due(afterUndo: true), "a switch long after isn't an undo")
+    }
+}

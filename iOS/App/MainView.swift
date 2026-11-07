@@ -86,16 +86,6 @@ struct MainView: View {
                     Toggle(isOn: $haptics) { Tip("Rung khi gõ", "Rung nhẹ mỗi khi chạm phím, như bàn phím của iPhone. Cần bật Cho phép Truy cập đầy đủ: Cài đặt › Vikey › Bàn phím. Vikey chỉ dùng quyền này để rung, không bao giờ gửi gì ra khỏi máy.") }
                     Toggle(isOn: $doubleSpace) { Tip("Phím tắt dấu chấm", "Chạm nhanh hai lần phím cách để thêm dấu chấm và một khoảng trắng.") }
                 }
-                Section {
-                    Toggle(isOn: $diagnostics) { Tip("Hiện thông số", "Phía trên các phím hiện thời gian xử lý mỗi lần chạm, số lần rung và số lần chạm iOS gửi tới, và ghi vào nhật ký. Nhật ký không chứa chữ bạn gõ, chỉ có thời gian và loại phím (chữ, dấu cách, xoá…). Cần Truy cập đầy đủ để bàn phím ghi được nhật ký.") }
-                    if diagnostics {
-                        ShareLink(item: logText.isEmpty ? "(nhật ký trống)" : logText, subject: Text("Vikey keyboard log")) {
-                            Label("Gửi nhật ký", systemImage: "square.and.arrow.up")
-                        }
-                        Button("Xoá nhật ký", role: .destructive) { KBLog.clear(); logText = "" }
-                        Text(logText.isEmpty ? LocalizedStringKey("Chưa có gì. Mở bàn phím Vikey và gõ thử.") : LocalizedStringKey("\(logText.split(separator: "\n").count) dòng")).font(.footnote).foregroundStyle(.secondary)
-                    }
-                } header: { Text("Gỡ lỗi") }
                 if debugMenu { debugSection }
                 Section {
                     Button { KeyboardStatus.openSettings() } label: {
@@ -129,6 +119,14 @@ extension MainView {
     /// The secret debug menu: the keyboard's nudges, shown the next time the keyboard opens.
     var debugSection: some View {
         Section {
+            Toggle(isOn: $diagnostics) { Tip("Hiện thông số", "Phía trên các phím hiện thời gian xử lý mỗi lần chạm, số lần rung và số lần chạm iOS gửi tới, và ghi vào nhật ký. Nhật ký không chứa chữ bạn gõ, chỉ có thời gian và loại phím (chữ, dấu cách, xoá…). Cần Truy cập đầy đủ để bàn phím ghi được nhật ký.") }
+            if diagnostics {
+                ShareLink(item: logText.isEmpty ? "(nhật ký trống)" : logText, subject: Text("Vikey keyboard log")) {
+                    Label("Gửi nhật ký", systemImage: "square.and.arrow.up")
+                }
+                Button("Xoá nhật ký", role: .destructive) { KBLog.clear(); logText = "" }
+                Text(logText.isEmpty ? LocalizedStringKey("Chưa có gì. Mở bàn phím Vikey và gõ thử.") : LocalizedStringKey("\(logText.split(separator: "\n").count) dòng")).font(.footnote).foregroundStyle(.secondary)
+            }
             Button { sendNudge("review") } label: { Label("Hiện lời mời đánh giá", systemImage: "star") }
             Button { sendNudge("bug") } label: { Label("Hiện lời mời góp ý", systemImage: "ladybug") }
             Button("Mở bảng đánh giá của Apple") { ReviewPrompt.request() }
