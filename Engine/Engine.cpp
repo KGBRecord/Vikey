@@ -1638,8 +1638,10 @@ static bool asHasInternalCapital(const Uint32* keys, int count) {
 }
 
 // A single Vietnamese syllable has one vowel nucleus. Ignore keys that
-// can be Telex modifiers so a spelling like "buwowng" is not split at w.
-static bool asHasSeparatedVowels(const Uint32* keys, int count) {
+// can be Telex modifiers (including z to remove a tone), so editing
+// a tone does not create a false boundary between vowel groups. In the
+// English doubled-key path, z remains literal evidence rather than an edit.
+static bool asHasSeparatedVowels(const Uint32* keys, int count, bool telexToneEdits) {
     bool sawVowel = false, afterConsonant = false;
     for (int i = 0; i < count; ++i) {
         const char c = asLetterOf(keys[i]);
@@ -1647,7 +1649,7 @@ static bool asHasSeparatedVowels(const Uint32* keys, int count) {
             if (afterConsonant) return true;
             sawVowel = true;
         } else if (sawVowel && c && c != 's' && c != 'f' && c != 'r' &&
-                   c != 'x' && c != 'j' && c != 'w') {
+                   c != 'x' && c != 'j' && c != 'w' && (c != 'z' || !telexToneEdits)) {
             afterConsonant = true;
         }
     }
@@ -1655,7 +1657,7 @@ static bool asHasSeparatedVowels(const Uint32* keys, int count) {
 }
 
 // Classify an unlisted literal only after excluding explicit Telex modifiers.
-static bool asHasLiteralWordShape(const Uint32* keys, int count) {
+static bool asHasLiteralWordShape(const Uint32* keys, int count, bool telexToneEdits) {
     // Explicit Telex modifiers remain evidence for an unlisted Vietnamese
     // syllable or a Vietnamese typo, even with a late modifier ("mawca").
     for (int i = 1; i < count; ++i) {
@@ -1663,7 +1665,7 @@ static bool asHasLiteralWordShape(const Uint32* keys, int count) {
         if (c == 'w' || (c == previous && (c == 'a' || c == 'e' || c == 'o' || c == 'd')))
             return false;
     }
-    return asHasInternalCapital(keys, count) || asHasSeparatedVowels(keys, count);
+    return asHasInternalCapital(keys, count) || asHasSeparatedVowels(keys, count, telexToneEdits);
 }
 
 static bool asShouldRestoreToEnglishCore(bool& literalOnly) {
@@ -1775,7 +1777,7 @@ static bool asShouldRestoreToEnglishCore(bool& literalOnly) {
         bool invalid = tempDisableKey;
         tempDisableKey = savedTemp;
         if (invalid) return true;
-        literalOnly = asHasLiteralWordShape(KeyStates, _stateIndex);
+        literalOnly = asHasLiteralWordShape(KeyStates, _stateIndex, true);
         return literalOnly;
     }
 #else
@@ -2388,7 +2390,7 @@ bool vAutoSwitchFixDoubledKey(const Uint32* keys, const int& count) {
     else if (!_asDoubleBoth &&
              (enFull || (!enSingle && (!asFewCapitals(full, total) ||
                                        asHasInternalCapital(full, total) ||
-                                       asHasLiteralWordShape(full, total))))) {
+                                       asHasLiteralWordShape(full, total, false))))) {
         // Keep a recognized literal even when deleting the key also spells
         // an English word. For unknown words require structural evidence.
         // This path already undid a doubled key into English; retain case
