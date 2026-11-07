@@ -170,3 +170,18 @@ D56	1	w 	ư 	1	Telex: a lone w is ư
 D58	1	docs 	docs 	0	docs (documentation) in Vietnamese mode stays English (X report, Tony)
 D58	1	xem docs nhes 	xem docs nhé 	1	docs in a Vietnamese sentence
 D58	1	nois docs 	nói dóc 	1	"nói dóc" (to lie) still converts
+D19	1	currentState 	currentState 	0	restore consumed tone key in a lowerCamelCase identifier
+D19	1	currentValue 	currentValue 	0	same identifier shape with a different suffix
+D19	1	dessert 	dessert 	0	keep the typed English word when deleting a letter also gives an English word
+D19	1	mousse 	mousse 	0	do not change one valid English spelling into another after Telex undo
+D19	1	mirrorless 	mirrorless 	0	restore literal keys for a multi-syllable word missing from the dictionary
+OOV-LITERAL	1	Sapa 	Sapa 	0	preserve a multi-syllable literal when the Telex rendering is unlisted
+OOV-LITERAL	1	Momo 	Momo 	0	same structural policy for lowercase or uppercase names
+OOV-LITERAL	1	mawca 	mâc 	1	explicit Telex modifier in an unlisted typo remains Vietnamese
+OOV-LITERAL	1	buwowng 	bương 	1	an unlisted syllable with explicit modifiers remains Vietnamese
+OOV-LITERAL	1	rieetj 	riệt 	1	keep an uncommon Vietnamese syllable
+OOV-LITERAL	1	chijt 	chịt 	1	keep an uncommon Vietnamese syllable with a tone
+OOV-LITERAL	1	hopoj 	hộp 	1	late circumflex modifier
+OOV-LITERAL	1	been Momo 	bên Momo 	0	a new literal name cannot justify rewriting the preceding Vietnamese word
+OOV-LITERAL	1	cuar Sapa 	của Sapa 	0	restore an unknown name without changing the preceding word
+OOV-LITERAL	1	This Samsung TV 	This Samsung TV 	0	keep existing lookback when spelling already provides English evidence
