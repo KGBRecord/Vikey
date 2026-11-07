@@ -301,6 +301,16 @@ final class KeyboardViewController: UIInputViewController, KeyboardViewDelegate 
         comingUp = false; setContentVisible(true)
         keyboard.playMarkIntro()
         readSelection()   // opened onto text that's already selected
+        showDebugNudge()
+    }
+
+    /// The app's debug menu asked for a nudge (VKSettings.Key.debugNudge): shown once, after the mark's intro.
+    /// The keyboard only reads the shared defaults, so what it showed is kept in its own.
+    private func showDebugNudge() {
+        guard let v = VKSettings.defaults.string(forKey: VKSettings.Key.debugNudge), v != UserDefaults.standard.string(forKey: "debugNudgeShown"),
+              let k = NudgeView.Kind(rawValue: String(v.split(separator: ":").first ?? "")) else { return }
+        UserDefaults.standard.set(v, forKey: "debugNudgeShown")
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.3) { [weak self] in self?.keyboard.bar.showNudge(k) }
     }
 
     override func textDidChange(_ textInput: UITextInput?) {
@@ -721,7 +731,6 @@ final class KeyboardViewController: UIInputViewController, KeyboardViewDelegate 
         case .alternative: replaceSelection(with: cell.text); return
         case .undo: undoProofread(); return
         case .busy: return
-        case .nudge: return   // a prototype: no action yet
         case .word: break
         }
         lastCorrection = nil

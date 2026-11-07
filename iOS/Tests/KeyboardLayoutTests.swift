@@ -155,30 +155,26 @@ final class CornerKeyInvisibleTests: XCTestCase {
     }
 }
 
-/// Nudges in the empty suggestion strip (prototype for Tony): a review invite after 100 auto-switches,
-/// a bug report after an undone correction. Renders only.
+/// Nudges in the empty suggestion strip (Tony's words): rendered at rest, in light and dark.
 final class NudgeRenderTests: XCTestCase {
     func testRenderNudges() {
         KeyboardView.barOn = true
         KeyboardView.langStyle = 1
-        let variants: [(String, Suggestion)] = [
-            ("review_a_vi", Suggestion(text: "Đã tự chuyển 100 lần", kind: .nudge, action: "Đánh giá", symbol: "star.fill")),
-            ("review_b_vi", Suggestion(text: "Thích Vikey không?", kind: .nudge, action: "Đánh giá", symbol: "star.fill")),
-            ("bug_vi", Suggestion(text: "Sửa sai từ vừa rồi?", kind: .nudge, action: "Báo lỗi", symbol: "ladybug.fill")),
-            ("review_a_en", Suggestion(text: "100 words switched", kind: .nudge, action: "Rate Vikey", symbol: "star.fill")),
-            ("bug_en", Suggestion(text: "Wrong correction?", kind: .nudge, action: "Report it", symbol: "ladybug.fill")),
-        ]
         for dark in [false, true] {
-            for (name, s) in variants {
+            for k in [NudgeView.Kind.review, .bug] {
                 let kb = KeyboardView(frame: CGRect(x: 0, y: 0, width: 402, height: KeyboardView.keyboardHeight(compactHeight: false)))
                 kb.dark = dark
                 kb.languageShort = "VI"; kb.languageTitle = "Tiếng Việt"
                 kb.backgroundColor = dark ? UIColor(white: 0.17, alpha: 1) : UIColor(red: 0.82, green: 0.83, blue: 0.86, alpha: 1)
-                kb.suggestions = [s]
+                kb.layoutIfNeeded()
+                kb.bar.showNudge(k)
+                kb.bar.layer.removeAllAnimations()
+                kb.bar.subviews.forEach { v in v.layer.removeAllAnimations(); v.subviews.forEach { $0.layer.removeAllAnimations() } }
+                RunLoop.main.run(until: Date().addingTimeInterval(2.5))
                 kb.layoutIfNeeded()
                 let img = UIGraphicsImageRenderer(bounds: kb.bounds).image { ctx in kb.layer.render(in: ctx.cgContext) }
                 try? FileManager.default.createDirectory(atPath: "/tmp/claude-501/layouts", withIntermediateDirectories: true)
-                try? img.pngData()?.write(to: URL(fileURLWithPath: "/tmp/claude-501/layouts/nudge_\(name)_\(dark ? "dark" : "light").png"))
+                try? img.pngData()?.write(to: URL(fileURLWithPath: "/tmp/claude-501/layouts/nudge_\(k.rawValue)_\(dark ? "dark" : "light").png"))
             }
         }
     }

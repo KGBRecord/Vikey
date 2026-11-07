@@ -19,6 +19,10 @@ struct MainView: View {
     @State private var added = KeyboardStatus.isAdded
     @State private var sample = ""
     @State private var logText = ""
+    /// The secret debug menu: five taps on the version (Tony, 2026-11-07).
+    @AppStorage("debugMenu") private var debugMenu = false
+    @State private var versionTaps = 0
+    @State private var debugSent: String?
     @Environment(\.scenePhase) private var phase
 
     var body: some View {
@@ -92,6 +96,7 @@ struct MainView: View {
                         Text(logText.isEmpty ? LocalizedStringKey("Chưa có gì. Mở bàn phím Vikey và gõ thử.") : LocalizedStringKey("\(logText.split(separator: "\n").count) dòng")).font(.footnote).foregroundStyle(.secondary)
                     }
                 } header: { Text("Gỡ lỗi") }
+                if debugMenu { debugSection }
                 Section {
                     Button { KeyboardStatus.openSettings() } label: {
                         LabeledContent("Ngôn ngữ ứng dụng", value: Locale.current.localizedString(forLanguageCode: Bundle.main.preferredLocalizations.first ?? "en") ?? "")
@@ -102,6 +107,11 @@ struct MainView: View {
                     Link("Gửi góp ý", destination: Self.feedbackURL)
                     Link("vikey.app", destination: URL(string: "https://vikey.app")!)
                     LabeledContent("Phiên bản", value: "\(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "") (\(Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? ""))")   // version (build)
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            versionTaps += 1
+                            if versionTaps >= 5 { versionTaps = 0; withAnimation { debugMenu.toggle() } }
+                        }
                 } footer: {
                     Text("Vikey được thiết kế và phát triển bởi Tony Dinh, dựa trên dự án mã nguồn mở OpenKey của Tuyen Mai. Mã nguồn mở theo giấy phép GPL-3.0.")
                 }
@@ -116,6 +126,23 @@ struct MainView: View {
 }
 
 extension MainView {
+    /// The secret debug menu: the keyboard's nudges, shown the next time the keyboard opens.
+    var debugSection: some View {
+        Section {
+            Button { sendNudge("review") } label: { Label("Hiện lời mời đánh giá", systemImage: "star") }
+            Button { sendNudge("bug") } label: { Label("Hiện lời mời góp ý", systemImage: "ladybug") }
+            Button("Mở bảng đánh giá của Apple") { ReviewPrompt.request() }
+            Button("Ẩn menu này", role: .destructive) { withAnimation { debugMenu = false } }
+        } header: { Text("Menu ẩn") } footer: {
+            Text(debugSent.map { "Mở bàn phím Vikey: lời mời \($0 == "review" ? "đánh giá" : "góp ý") hiện sau khi logo chạy xong." } ?? "Chạm 5 lần vào Phiên bản để ẩn hoặc hiện menu này.")
+        }
+    }
+
+    private func sendNudge(_ k: String) {
+        VKSettings.defaults.set("\(k):\(Date().timeIntervalSince1970)", forKey: VKSettings.Key.debugNudge)
+        debugSent = k
+    }
+
     /// Send feedback, top right of the header (Tony picked the capsule with text).
     var feedbackButton: some View {
         Link(destination: Self.feedbackURL) {

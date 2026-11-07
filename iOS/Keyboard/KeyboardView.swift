@@ -208,6 +208,8 @@ final class KeyboardView: UIView {
         addSubview(bar)
         bar.onPick = { [unowned self] i in self.delegate?.keyboard(self, pickSuggestion: i) }
         bar.onBrand = { [unowned self] in self.openVikeyApp() }
+        // A nudge's button opens the app where it acts: Apple's review sheet, or the feedback form.
+        bar.onNudge = { [unowned self] k in self.bar.hideNudge(); self.openVikeyApp(k == .review ? "review" : "feedback") }
         addSubview(mark)
         addSubview(popup); popup.isHidden = true
         addSubview(alternates); alternates.isHidden = true
@@ -800,23 +802,23 @@ final class AlternatesView: UIView {
 
 /// One cell of the suggestion strip.
 struct Suggestion: Equatable {
-    enum Kind: Equatable { case word, next, proofread, alternative, undo, busy, nudge }
+    enum Kind: Equatable { case word, next, proofread, alternative, undo, busy }
     var text: String
     var quoted = false        // the word as typed, when something else is offered
     var highlighted = false   // what the space bar will put in (auto-correct)
-    var kind: Kind = .word    // next word, ✨ proofread, another word for a selection, undo, or a "working…" note, or a nudge
-    /// A nudge's action, after its text ("Đánh giá", "Báo lỗi"), and its symbol (SF Symbol).
-    var action: String? = nil
-    var symbol: String? = nil
+    var kind: Kind = .word    // next word, ✨ proofread, another word for a selection, undo, or a "working…" note
 }
 
 /// The strip above the keys: up to three words, like the system keyboard's.
 final class SuggestionBar: UIView {
     var onPick: ((Int) -> Void)?
     var onBrand: (() -> Void)?
-    /// A nudge's ✕: not now.
-    var onDismissNudge: (() -> Void)?
-    private let close = UIButton(type: .system)
+    /// A nudge (Nudge.swift): its button, and its ✕.
+    var onNudge: ((NudgeView.Kind) -> Void)?
+    var onNudgeClosed: ((NudgeView.Kind) -> Void)?
+    private let nudgeView = NudgeView()
+    /// The nudge shown, on an empty strip only: words coming in fold it away.
+    private(set) var nudge: NudgeView.Kind?
     var dark = false { didSet { if dark != oldValue { restyle() } } }
     private var cells: [UIButton] = []
     private var lines: [UIView] = []
@@ -853,21 +855,40 @@ final class SuggestionBar: UIView {
             addSubview(b); cells.append(b)
         }
         for _ in 0..<2 { let l = UIView(); addSubview(l); lines.append(l) }
-        close.setImage(UIImage(systemName: "xmark", withConfiguration: UIImage.SymbolConfiguration(pointSize: 12, weight: .semibold)), for: .normal)
-        close.accessibilityLabel = "Không phải bây giờ"
-        close.addTarget(self, action: #selector(tapClose), for: .touchUpInside)
-        addSubview(close)
+        nudgeView.isHidden = true
+        nudgeView.onAction = { [unowned self] in if let k = nudge { onNudge?(k) } }
+        nudgeView.onClose = { [unowned self] in if let k = nudge { nudge = nil; nudgeView.isHidden = true; restyle(); onNudgeClosed?(k) } }
+        addSubview(nudgeView)
         restyle()
     }
     required init?(coder: NSCoder) { fatalError() }
 
     @objc private func tapBrand() { onBrand?() }
-    @objc private func tapClose() { onDismissNudge?() }
-    private var nudge: Suggestion? { items.count == 1 && items[0].kind == .nudge ? items[0] : nil }
 
     @objc private func tap(_ b: UIButton) { if b.tag < items.count { onPick?(b.tag) } }
 
-    func show(_ s: [Suggestion]) { items = s; restyle(); setNeedsLayout() }
+    func show(_ s: [Suggestion]) {
+        items = s
+        if !s.isEmpty, nudge != nil { hideNudge() }
+        restyle(); setNeedsLayout()
+    }
+
+    /// Shows a nudge on the empty strip, opening as the corner mark does.
+    func showNudge(_ k: NudgeView.Kind) {
+        guard items.isEmpty else { return }
+        nudge = k
+        nudgeView.dark = dark
+        nudgeView.isHidden = false
+        nudgeView.frame = bounds.insetBy(dx: 2, dy: 2)
+        nudgeView.set(k)
+        restyle()
+        nudgeView.play()
+    }
+    func hideNudge() {
+        guard nudge != nil else { return }
+        nudge = nil
+        nudgeView.fold { [weak self] in self?.nudgeView.isHidden = true; self?.restyle() }
+    }
 
     private func restyle() {
         let fg: UIColor = dark ? .white : .black
@@ -876,9 +897,8 @@ final class SuggestionBar: UIView {
         let word = NSMutableAttributedString(string: "Vi", attributes: [.font: UIFont.systemFont(ofSize: 15, weight: .bold), .foregroundColor: fg])
         word.append(NSAttributedString(string: "key", attributes: [.font: UIFont.systemFont(ofSize: 15, weight: .bold), .foregroundColor: indigo]))
         markText.attributedText = word
-        mark.isHidden = !items.isEmpty || !showsBrand   // only on an empty strip
-        close.isHidden = nudge == nil
-        close.tintColor = fg.withAlphaComponent(0.45)
+        mark.isHidden = !items.isEmpty || !showsBrand || nudge != nil   // only on an empty strip
+        nudgeView.dark = dark
         for (i, b) in cells.enumerated() {
             let it = i < items.count ? items[i] : nil
             let title: String? = it.map {
@@ -889,30 +909,6 @@ final class SuggestionBar: UIView {
                 }
             }
             b.setTitle(title, for: .normal)
-            // A nudge: its words quiet, its action in the brand's colour, the symbol before it.
-            if let it, it.kind == .nudge {
-                let brandC: UIColor = dark ? UIColor(red: 0.62, green: 0.60, blue: 1, alpha: 1) : UIColor(red: 0.31, green: 0.27, blue: 0.90, alpha: 1)
-                let t = NSMutableAttributedString(string: it.text, attributes: [.font: UIFont.systemFont(ofSize: 15), .foregroundColor: fg.withAlphaComponent(0.72)])
-                if let a = it.action {
-                    t.append(NSAttributedString(string: "   ", attributes: [.font: UIFont.systemFont(ofSize: 15)]))
-                    if let sym = it.symbol, let img = UIImage(systemName: sym, withConfiguration: UIImage.SymbolConfiguration(pointSize: 13, weight: .semibold))?.withTintColor(brandC, renderingMode: .alwaysOriginal) {
-                        t.append(NSAttributedString(attachment: NSTextAttachment(image: img)))
-                        t.append(NSAttributedString(string: " ", attributes: [.font: UIFont.systemFont(ofSize: 15)]))
-                    }
-                    t.append(NSAttributedString(string: a, attributes: [.font: UIFont.systemFont(ofSize: 15, weight: .semibold), .foregroundColor: brandC]))
-                }
-                b.setAttributedTitle(t, for: .normal)
-                b.contentHorizontalAlignment = .left
-                b.contentEdgeInsets = UIEdgeInsets(top: 0, left: 14, bottom: 0, right: 10)
-                b.titleLabel?.lineBreakMode = .byTruncatingTail
-                b.backgroundColor = dark ? UIColor(white: 1, alpha: 0.08) : UIColor(white: 1, alpha: 0.55)
-                b.isEnabled = true
-                continue
-            }
-            b.setAttributedTitle(nil, for: .normal)
-            b.contentHorizontalAlignment = .center
-            b.contentEdgeInsets = .zero
-            b.titleLabel?.lineBreakMode = .byTruncatingMiddle
             let brand: UIColor = dark ? UIColor(red: 0.62, green: 0.60, blue: 1, alpha: 1) : UIColor(red: 0.31, green: 0.27, blue: 0.90, alpha: 1)
             b.setTitleColor(it?.kind == .busy ? fg.withAlphaComponent(0.45) : it?.kind == .proofread || it?.kind == .undo ? brand : fg, for: .normal)
             b.titleLabel?.font = .systemFont(ofSize: 17, weight: it?.kind == .proofread ? .semibold : .regular)
@@ -929,21 +925,12 @@ final class SuggestionBar: UIView {
     override func layoutSubviews() {
         super.layoutSubviews()
         markText.sizeToFit()
+        if !nudgeView.isHidden { nudgeView.frame = bounds.insetBy(dx: 2, dy: 2) }
         let iconSide: CGFloat = 18, gap: CGFloat = 6
         let mw = iconSide + gap + markText.bounds.width
         mark.frame = CGRect(x: bounds.width - 14 - mw, y: (bounds.height - iconSide) / 2, width: mw, height: iconSide)
         markIcon.frame = CGRect(x: 0, y: 0, width: iconSide, height: iconSide)
         markText.frame = CGRect(x: iconSide + gap, y: (iconSide - markText.bounds.height) / 2, width: markText.bounds.width, height: markText.bounds.height)
-        // a nudge: one wide cell, its ✕ on the right where the brand would be
-        if let _ = nudge {
-            let cw: CGFloat = 36
-            close.frame = CGRect(x: bounds.width - cw - 4, y: 2, width: cw, height: bounds.height - 4)
-            cells[0].frame = CGRect(x: 4, y: 3, width: bounds.width - cw - 12, height: bounds.height - 6)
-            cells[0].layer.cornerRadius = cells[0].bounds.height / 2
-            for b in cells.dropFirst() { b.frame = .zero }
-            lines.forEach { $0.isHidden = true }
-            return
-        }
         // one wide cell for a single action (✨ Proofread, ↩︎ Undo, "working…"); three otherwise
         if items.count == 1, items[0].kind != .word, items[0].kind != .next {
             cells[0].frame = bounds.insetBy(dx: 2, dy: 2)
@@ -951,7 +938,6 @@ final class SuggestionBar: UIView {
             lines.forEach { $0.isHidden = true }
             return
         }
-        cells[0].layer.cornerRadius = 8
         let w = bounds.width / 3
         for (i, b) in cells.enumerated() { b.frame = CGRect(x: CGFloat(i) * w + 2, y: 2, width: w - 4, height: bounds.height - 4) }
         for (i, l) in lines.enumerated() { l.frame = CGRect(x: CGFloat(i + 1) * w - 0.5, y: bounds.height * 0.28, width: 1, height: bounds.height * 0.44) }
@@ -961,8 +947,8 @@ final class SuggestionBar: UIView {
 extension KeyboardView {
     /// Opens the Vikey app (vikey://). A keyboard can't call UIApplication.shared, so this walks the responder chain
     /// to the host's UIApplication and calls open(_:options:completionHandler:) on it by selector.
-    func openVikeyApp() {
-        guard let url = URL(string: "vikey://") else { return }
+    func openVikeyApp(_ path: String = "") {
+        guard let url = URL(string: "vikey://\(path)") else { return }
         let sel = NSSelectorFromString("openURL:options:completionHandler:")
         var r: UIResponder? = self
         while let next = r {
