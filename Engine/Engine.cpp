@@ -12,6 +12,7 @@
 #include <cmath>
 #include <list>
 #include "AutoSwitchData.h"
+#include "EnglishFormsData.h"
 #include "BigramData.h"
 #include <string>
 #include <unordered_map>
@@ -1372,38 +1373,25 @@ static inline int asEnglishLookup(const char* word) {
     return asLookup(kAutoSwitchEnWords, kAutoSwitchEnOffsets, kAutoSwitchEnScores, kAutoSwitchEnCount, word);
 }
 
-/** An English word the list (subtitles) is missing in this form: -s, -es, -ed, -ing on a listed word of 4+
- *  letters ("resets", "presets", "resetting"), 10x rarer than the word itself. Never when the letters are a
- *  Vietnamese key ("thans" is thán), and never for short stems (cos, nos are có, nó). */
-static int asEnglishInflected(const char* word) {
-    int n = (int)strlen(word);
-    if (n < 6 || n >= AS_KEY_LEN || asVietnameseScore(word) != AS_MISSING) return AS_MISSING;
-    char stem[AS_KEY_LEN];
-    int best = AS_MISSING;
-    auto tryStem = [&](int len, const char* add) {
-        if (len < 4) return;
-        memcpy(stem, word, len);
-        stem[len] = 0;
-        strcat(stem, add);
-        int s = asEnglishLookup(stem);
-        if (s != AS_MISSING && s - 10 > best) best = s - 10;
-    };
-    auto ends = [&](const char* suffix) { int k = (int)strlen(suffix); return n > k && strcmp(word + n - k, suffix) == 0; };
-    if (ends("s") && !ends("ss")) tryStem(n - 1, "");
-    if (ends("es")) tryStem(n - 2, "");
-    for (const char* suffix : {"ed", "ing"}) {
-        if (!ends(suffix)) continue;
-        int len = n - (int)strlen(suffix);
-        tryStem(len, "");
-        tryStem(len, "e");                                          //saved, making
-        if (len >= 2 && word[len - 1] == word[len - 2]) tryStem(len - 1, "");   //resetting, stopped
+/** A real English word form the list (subtitles) is missing: "resets", "quests" (D60; SCOWL en_US forms,
+ *  Tools/autoswitch/build_forms.py). It counts as English, rarer than every listed word, and never when its
+ *  letters are a Vietnamese word: "phis" (Greek letters) is phí. */
+#define AS_EN_FORM_SCORE (-8)
+static int asEnglishForm(const char* word) {
+    if (asVietnameseScore(word) != AS_MISSING) return AS_MISSING;
+    int lo = 0, hi = kEnglishFormsCount - 1;
+    while (lo <= hi) {
+        int mid = (lo + hi) >> 1;
+        int c = strcmp(kEnglishFormsWords + kEnglishFormsOffsets[mid], word);
+        if (c == 0) return AS_EN_FORM_SCORE;
+        if (c < 0) lo = mid + 1; else hi = mid - 1;
     }
-    return best < -120 ? AS_MISSING : best;
+    return AS_MISSING;
 }
 
 static inline int asEnglishScore(const char* word) {
     int s = asEnglishLookup(word);
-    return s != AS_MISSING ? s : asEnglishInflected(word);
+    return s != AS_MISSING ? s : asEnglishForm(word);
 }
 
 /** Normalized key of the word in TypingWord; transformed = it has a tone, ^, w-horn/breve or đ. */
