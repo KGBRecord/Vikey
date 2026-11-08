@@ -212,3 +212,11 @@ D19	1	terrazzo 	terrazzo 	0	z remains literal evidence after a doubled-key switc
 D19	1	Terrazzo 	Terrazzo 	0	z remains literal evidence after a doubled-key switch to English
 D19	1	terrorizer 	terrorizer 	0	z remains literal evidence after a doubled-key switch to English
 D19	1	Terrorizer 	Terrorizer 	0	z remains literal evidence after a doubled-key switch to English
+D60	0	this get resets 	this get resets 	0	EN mode: resets is English (the list has reset, not resets); never rêts (Tony's report)
+D60	0	presets 	presets 	0	EN mode: -s on an English word of 4+ letters is English
+D60	1	resets 	resets 	0	VN mode: the doubled s ends as the English word, not reets (D19: the dictionary decides at the end)
+D60	1	resetting 	resetting 	0	-ing with the doubled consonant is English too
+D60	1	quests 	quests 	0	-s: quests, not quets
+D60	1	thans 	thán 	1	never when the letters are a Vietnamese word: thans is thán
+D60	1	nos 	nó 	1	never for stems under 4 letters: nos is nó
+D60	0	crypto nos volatile 	crypto nó volatile 	1	same in EN mode: D22's nos -> nó stays

@@ -5,6 +5,18 @@ Each entry records what was asked, what was decided, and its status. Newest firs
 
 Status values: **Shipped** (in a build Tony has), **Agreed** (decided, not built yet), **Rejected**.
 
+## 60. English word forms the list is missing: "resets" stays "resets"
+
+**Status:** Built 2026-11-08, not in a release yet (Tony's report).
+
+**Problem.** On the Mac, "this get resets " gave "this get rêts ". The English list comes from subtitles: it has "reset" but not "resets". So in English mode the keys weren't English, and their Telex replay "rêts" has the same lookup key as the real word "rết" (the trailing s reads as the sắc tone), so the word was converted. In Vietnamese mode the doubled s gave "reets" (D19: the dictionary decides at the end, and "resets" wasn't in it).
+
+**Fix.** A word the list doesn't have counts as English, 10x rarer than its stem, when it is a listed English word of 4+ letters plus -s, -es, -ed or -ing (also stem + e, and a doubled last consonant: "resetting"). Never when the letters are a Vietnamese word ("thans" is thán), and never for stems under 4 letters ("cos", "nos" are có, nó).
+
+**Result.** Rules D60 (8 cases), reported bug R21. All other rules, reported bugs and the Telex lock unchanged; one golden line better ("quets" → "quests"); synthetic manual switches 111 → 110.
+
+**Every decision has a test.** `rules/decisions.py` (in check.sh) fails when a decision has neither cases tagged with it nor a row in `rules/decisions.tsv` naming its tests, or saying why it has none. Open (behavior, no automated test yet): D1, D3, D15, D21, D54, all app-level (they need a live test on that platform).
+
 ## 59. ":" and ";" after a space stay where they are (phone keyboards)
 
 **Status:** Shipped 2026-11-02 (Tony changed his mind on the earlier behavior).
