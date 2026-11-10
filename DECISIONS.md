@@ -5,6 +5,24 @@ Each entry records what was asked, what was decided, and its status. Newest firs
 
 Status values: **Shipped** (in a build Tony has), **Agreed** (decided, not built yet), **Rejected**.
 
+## 61. Backspace after a fixed word: the first takes the space, the second undoes
+
+**Status:** Built 2026-11-10 in a PR, waiting for Tony (a user's report, via Tony).
+
+**Problem.** A user typed a Vietnamese word in English mode ("dduowcj"), pressed Space, and auto switch made it "được". He then saw it needed a comma and pressed Backspace to take the space back. Backspace right after a fix is the undo (D32), so the word went back to "dduowcj". The same happens the other way: "Sapa " ⌫ gave "Sâp". The realistic typing simulator never saw this, because it never modelled the Backspace undo.
+
+**Fix.** Two steps, on Mac, Windows, Linux, iPhone and Android:
+- The first Backspace right after a fix takes only the break key (the space, or the , . that ended the word). The fixed word stays. "được " ⌫ "," gives "được,".
+- A second Backspace right after it undoes the fix, as one Backspace did before: the typed keys and the language come back, and typing on works as in D32.
+- Any other key, a click or a switch in between ends the chance to undo.
+- Cost: undoing a wrong fix takes ⌫⌫ instead of ⌫.
+
+**Simulator.** `sim.cpp` now models the Backspace undo like `VikeyCore.mm` (the undo, the word kept as typed after it, a click ending it). `SIM_UNDO_ONE_STEP=1` gives the old one-step undo. `rtsim.cpp` has a new slip, late-punct: for 30% of the words that end with , . ? ! ; : the person types Space first, then Backspace, then the mark.
+
+**Result.** Late-punct slips that needed fixing by hand (chat x3 seeds + synthetic): 269/3502 with the one-step undo, 12/3502 with the two-step undo. The same words with the mark typed straight away: 12/3502, so the Backspace costs nothing now. Every other slip kind, the lazy-typer metrics and the goldens are unchanged. `driver/undo_test` has the new cases; Windows/Android and Linux live cases updated.
+
+**Still open.** Backspace into a fixed word to edit its last letter ("được " ⌫⌫ to change "ợ") reaches the undo on the second Backspace and puts the typed keys back. The simulator counts this: back-into-word 422/6606 with the one-step undo (on the first Backspace), 425/6606 with the two-step undo (on the second). Before the undo was modelled the simulator showed 1/6606. Fixing it needs a different undo gesture; Tony's call.
+
 ## 60. English word forms the list is missing: "resets" stays "resets"
 
 **Status:** Built 2026-11-08, not in a release yet (Tony's report).

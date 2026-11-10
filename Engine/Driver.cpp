@@ -43,6 +43,7 @@ void VikeyDriver::rememberFix(int corrected, Uint16 key, bool shift) {
     }
     undoRemove = corrected + 1;
     undoLanguage = vLanguage;
+    undoBreakGone = false;
     undoActive = true;
 }
 
@@ -81,10 +82,13 @@ void VikeyDriver::resetContext() {
 VKEdit VikeyDriver::press(Uint16 key, bool shift, double now) {
     VKEdit e;
     updatePause(now);
-    //Backspace right after an auto-fix puts the typed keys and the language back
-    if (key == KEY_DELETE && undoActive) {
+    //Backspace right after an auto-fix: the first one takes only the break key, the fixed word stays
+    //("được " ⌫ "," -> "được,"); a second one right after puts the typed keys and the language back
+    bool keepUndo = false;
+    if (key == KEY_DELETE && undoActive && !undoBreakGone) { undoBreakGone = true; keepUndo = true; }
+    else if (key == KEY_DELETE && undoActive) {
         undoActive = false;
-        e.deleteCount = undoRemove;
+        e.deleteCount = undoRemove - 1;   // the break key is gone already
         e.text = undoText;
         if (vLanguage != undoLanguage) { vLanguage = undoLanguage; e.languageChanged = true; }
         startNewSession();
@@ -98,7 +102,7 @@ VKEdit VikeyDriver::press(Uint16 key, bool shift, double now) {
         undos++;
         return e;
     }
-    undoActive = false;
+    undoActive = keepUndo;
     if (vLanguage == 1) {
         vAutoSwitchRequest = -1;
         vKeyHandleEvent(vKeyEvent::Keyboard, vKeyEventState::KeyDown, key, shift ? 1 : 0, false);
