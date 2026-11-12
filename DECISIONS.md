@@ -7,7 +7,7 @@ Status values: **Shipped** (in a build Tony has), **Agreed** (decided, not built
 
 ## 61. Backspace after a fixed word: the first takes the space, the second undoes
 
-**Status:** Built 2026-11-10 in a PR, waiting for Tony (a user's report, via Tony).
+**Status:** Shipped in 1.0.33 (Mac), 2026-11-12. Tony approved it (a user's report, via Tony). Live test on the Mac app: 26/26.
 
 **Problem.** A user typed a Vietnamese word in English mode ("dduowcj"), pressed Space, and auto switch made it "được". He then saw it needed a comma and pressed Backspace to take the space back. Backspace right after a fix is the undo (D32), so the word went back to "dduowcj". The same happens the other way: "Sapa " ⌫ gave "Sâp". The realistic typing simulator never saw this, because it never modelled the Backspace undo.
 
@@ -25,7 +25,7 @@ Status values: **Shipped** (in a build Tony has), **Agreed** (decided, not built
 
 ## 60. English word forms the list is missing: "resets" stays "resets"
 
-**Status:** Built 2026-11-08, not in a release yet (Tony's report).
+**Status:** Shipped in 1.0.32 (Mac), 2026-11-08 (Tony's report).
 
 **Problem.** On the Mac, "this get resets " gave "this get rêts ". The English list comes from subtitles: it has "reset" but not "resets". So in English mode the keys weren't English, and their Telex replay "rêts" has the same lookup key as the real word "rết" (the trailing s reads as the sắc tone), so the word was converted. In Vietnamese mode the doubled s gave "reets" (D19: the dictionary decides at the end, and "resets" wasn't in it).
 
