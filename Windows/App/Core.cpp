@@ -79,7 +79,7 @@ static int _enPrevN = 0;
 static bool _enPrevRestored = false;   // _enPrevKeys[0] was put back to English by auto switch (D35)
 
 struct AutoFixUndo {
-    bool active; int removeCount; wchar_t text[MAX_BUFF + 1]; int textCount; int language;
+    bool active; bool breakGone; int removeCount; wchar_t text[MAX_BUFF + 1]; int textCount; int language;   // breakGone: the first Backspace took the break key (D61)
     Uint32 keys[MAX_BUFF]; int keyCount;   // the keys of the original word (English mode can go on typing it after an undo, D32)
 };
 static AutoFixUndo _autoFixUndo = {};
@@ -410,7 +410,7 @@ static void RememberAutoFix(int correctedCount) {
         if (vAutoSwitchUndoData[x] & CHAR_CODE_MASK) { _autoFixUndo.keyCount = 0; break; }   // shown text, not keys
         _autoFixUndo.keys[_autoFixUndo.keyCount++] = vAutoSwitchUndoData[x];
     }
-    _autoFixUndo.removeCount = correctedCount + 1; _autoFixUndo.language = vLanguage; _autoFixUndo.active = true;
+    _autoFixUndo.removeCount = correctedCount + 1; _autoFixUndo.language = vLanguage; _autoFixUndo.breakGone = false; _autoFixUndo.active = true;
 }
 static bool UndoAutoFixWithBackspace() {
     if (!_autoFixUndo.active) return false;
@@ -589,9 +589,14 @@ static LRESULT CALLBACK keyboardHook(int nCode, WPARAM wParam, LPARAM lParam) {
     }
     _hasJustUsedHotKey = _lastFlag != 0;
 
-    // Backspace right after an automatic correction undoes it
-    if (_keycode == KEY_DELETE && _autoFixUndo.active && !(OTHER_CONTROL_KEY)) { if (UndoAutoFixWithBackspace()) return 1; }
-    _autoFixUndo.active = false;
+    // Backspace right after an automatic correction (D61): the first takes only the break key and keeps the
+    // correction ("được " ⌫ "," -> "được,"); a second one right after undoes it. Any other key ends that chance
+    bool keepUndo = false;
+    if (_keycode == KEY_DELETE && _autoFixUndo.active && !(OTHER_CONTROL_KEY)) {
+        if (!_autoFixUndo.breakGone) { _autoFixUndo.breakGone = true; _autoFixUndo.removeCount--; keepUndo = true; }
+        else if (UndoAutoFixWithBackspace()) return 1;
+    }
+    _autoFixUndo.active = keepUndo;
     TLNoteKey(_keycode, _flag);
 
     updateOtherInputLanguage();   // every key: Win+Space can switch to a Japanese/Chinese IME in the same window

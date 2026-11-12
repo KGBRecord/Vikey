@@ -1,6 +1,6 @@
 // Types a mixed Vietnamese/English corpus into the real Vikey engine, key by key, with an
 // "ideal user" who presses the switch hotkey only when the next word would come out wrong.
-// Mirrors App/Core/VikeyCore.mm (English-mode word buffer, auto switch, hotkey undo).
+// Mirrors App/Core/VikeyCore.mm (English-mode word buffer, auto switch, Backspace undo).
 // Build: see README.md.   Run: sim units.txt [--off] [--start en|vi] [--show N]
 #include "Engine.h"
 #include <cstdio>
@@ -23,7 +23,9 @@ struct Platform {                    // everything VikeyCore.mm keeps outside th
     U screen;
     Uint32 enKeys[MAX_BUFF]; int enCount = 0; bool enValid = true; bool enAfterDouble = false;
     Uint32 prevKeys[2][MAX_BUFF]; int prevCounts[2] = {0, 0}; int prevN = 0;
-    bool undoActive = false; int undoRemove = 0; U undoText;
+    bool undoActive = false, undoBreakGone = false; int undoRemove = 0, undoLanguage = 1; U undoText;   // Backspace undo (D32, D61)
+    Uint32 undoKeys[MAX_BUFF]; int undoKeyCount = 0;     // keys of the original word (English can go on typing it)
+    Uint32 undoneKeys[MAX_BUFF]; int undoneCount = 0;    // the word Backspace put back: finished unchanged, it stays
     int autoSwitches = 0, undos = 0;
     int runSide = -1, runCount = 0, earlySwitches = 0;   // Early Switch (D28)
     bool prevRestored = false;                           // prevKeys[0] was put back to English by auto switch (D35)
@@ -74,10 +76,18 @@ static void rememberFix(int corrected, Uint16 key, bool shift) {
     for (int x = 0; x < vAutoSwitchUndoCount; x++) if ((vAutoSwitchUndoData[x] & 0xFFFF) == KEY_SPACE && !(vAutoSwitchUndoData[x] & CHAR_CODE_MASK)) return;   //multi-word fix: no undo
     P.undoText.clear();
     for (int x = 0; x < vAutoSwitchUndoCount; x++) P.undoText.push_back(charOf(vAutoSwitchUndoData[x]));
-    P.undoText.push_back(brk);
-    P.undoRemove = corrected + 1;
+    P.undoKeyCount = 0;
+    for (int x = 0; x < vAutoSwitchUndoCount && x < MAX_BUFF; x++) {
+        if (vAutoSwitchUndoData[x] & CHAR_CODE_MASK) { P.undoKeyCount = 0; break; }   // shown text, not keys
+        P.undoKeys[P.undoKeyCount++] = vAutoSwitchUndoData[x];
+    }
+    P.undoRemove = corrected + 1;   // the fixed word and the break key after it
+    P.undoLanguage = vLanguage;
+    P.undoBreakGone = false;
     P.undoActive = true;
 }
+// SIM_UNDO_ONE_STEP=1: Backspace right after a fix undoes it at once (1.0.32 and before), to compare with D61
+static bool undoOneStep() { static int v = getenv("SIM_UNDO_ONE_STEP") ? atoi(getenv("SIM_UNDO_ONE_STEP")) : 0; return v != 0; }
 static void switchTo(int lang) { vLanguage = lang; startNewSession(); vAutoSwitchForget(); P.autoSwitches++; }
 
 static void switchTo(int lang);
@@ -93,7 +103,26 @@ static void earlyWord(int side) {
 }
 
 static void press(Uint16 key, bool shift) {
-    P.undoActive = false;
+    // Backspace right after an auto-fix (D61): the first takes only the break key, the fixed word stays ("được " ⌫ ","
+    // -> "được,"); the next one right after puts the typed keys and the language back (D32)
+    bool keepUndo = false;
+    if (key == KEY_DELETE && P.undoActive && !P.undoBreakGone && !undoOneStep()) { P.undoBreakGone = true; keepUndo = true; }
+    else if (key == KEY_DELETE && P.undoActive) {
+        P.undoActive = false;
+        int remove = P.undoBreakGone ? P.undoRemove - 1 : P.undoRemove;
+        for (int i = 0; i < remove && !P.screen.empty(); i++) P.screen.pop_back();
+        P.screen += P.undoText;
+        vLanguage = P.undoLanguage;
+        startNewSession(); vAutoSwitchForget();
+        P.enCount = 0; P.enValid = false; P.prevN = 0; P.enAfterDouble = false; P.undoneCount = 0; P.navOffset = 0;
+        if (vLanguage == 0 && P.undoKeyCount > 0) {   // the typed keys are the current word again ("vaay" + "j" -> "vậy")
+            memcpy(P.enKeys, P.undoKeys, P.undoKeyCount * sizeof(Uint32)); P.enCount = P.undoKeyCount; P.enValid = true;
+            memcpy(P.undoneKeys, P.undoKeys, P.undoKeyCount * sizeof(Uint32)); P.undoneCount = P.undoKeyCount;
+        }
+        P.undos++;
+        return;
+    }
+    P.undoActive = keepUndo;
     if (vLanguage == 1) {
         vAutoSwitchRequest = -1;
         vAutoSwitchLastSide = -2;
@@ -161,7 +190,9 @@ static void press(Uint16 key, bool shift) {
     P.enCount = 0; P.enValid = isWhitespace(key) || (key == KEY_9 && shift) || key == KEY_LEFT_BRACKET || key == KEY_QUOTE;
     const Uint32* prev[2] = {P.prevKeys[0], P.prevKeys[1]};
     vAutoSwitchPrevRestored = P.prevRestored && P.prevN >= 1;
-    bool converted = wordEnd && valid && count >= 2 &&
+    bool same = P.undoneCount > 0 && count == P.undoneCount && !memcmp(P.enKeys, P.undoneKeys, count * sizeof(Uint32));
+    if (wordEnd) P.undoneCount = 0;   // the word Backspace put back, finished unchanged: it stays as typed (D32)
+    bool converted = wordEnd && valid && count >= 2 && !same &&
         (getenv("SIM_NO_LOOKBACK") ? vAutoSwitchCheckEnglishWord(P.enKeys, count) : vAutoSwitchCheckEnglishWord(P.enKeys, count, prev, P.prevCounts, P.prevN));
     if (!converted && wordEnd && valid && count >= 2) earlyWord(vAutoSwitchWordSide(P.enKeys, count));
     if (!converted && key == KEY_SPACE && valid && count >= 1) {

@@ -34,7 +34,7 @@ static bool _enNavValid = true, _enNavAfterDouble = false;
 static Uint32 _enPrevKeys[2][MAX_BUFF]; static int _enPrevCounts[2]; static int _enPrevN = 0;
 static bool _enPrevRestored = false;   // _enPrevKeys[0] was put back to English by auto switch (D35)
 // keys: the original word (English mode can go on typing it after an undo, D32)
-struct AutoFixUndo { bool active; int removeCount; char32_t text[MAX_BUFF + 1]; int textCount; int language; Uint32 keys[MAX_BUFF]; int keyCount; };
+struct AutoFixUndo { bool active; bool breakGone; int removeCount; char32_t text[MAX_BUFF + 1]; int textCount; int language; Uint32 keys[MAX_BUFF]; int keyCount; };
 static AutoFixUndo _autoFixUndo = {};
 // after an undo the restored word stays the current word; finishing it unchanged doesn't redo the fix (D32)
 static Uint32 _undoneKeys[MAX_BUFF]; static int _undoneCount = 0;
@@ -236,7 +236,7 @@ static void RememberAutoFix(int correctedCount) {
         if (vAutoSwitchUndoData[x] & CHAR_CODE_MASK) { _autoFixUndo.keyCount = 0; break; }   // shown text, not keys
         _autoFixUndo.keys[_autoFixUndo.keyCount++] = vAutoSwitchUndoData[x];
     }
-    _autoFixUndo.removeCount = correctedCount + 1; _autoFixUndo.language = vLanguage; _autoFixUndo.active = true;
+    _autoFixUndo.removeCount = correctedCount + 1; _autoFixUndo.language = vLanguage; _autoFixUndo.breakGone = false; _autoFixUndo.active = true;
 }
 static bool UndoAutoFixWithBackspace() {
     if (!_autoFixUndo.active) return false;
@@ -342,8 +342,14 @@ bool keyDown(Uint16 key, bool shift, unsigned flags) {
             toggleLanguage("hotkey"); _lastFlag = 0; return true;
         }
     }
-    if (_keycode == KEY_DELETE && _autoFixUndo.active && !(OTHER_CONTROL_KEY)) { if (UndoAutoFixWithBackspace()) return true; }
-    _autoFixUndo.active = false;
+    // Backspace right after an automatic correction (D61): the first takes only the break key and keeps the
+    // correction ("được " ⌫ "," -> "được,"); a second one right after undoes it. Any other key ends that chance
+    bool keepUndo = false;
+    if (_keycode == KEY_DELETE && _autoFixUndo.active && !(OTHER_CONTROL_KEY)) {
+        if (!_autoFixUndo.breakGone) { _autoFixUndo.breakGone = true; _autoFixUndo.removeCount--; keepUndo = true; }
+        else if (UndoAutoFixWithBackspace()) return true;
+    }
+    _autoFixUndo.active = keepUndo;
     TLNoteKey(_keycode, _flag);
     if (vLanguage == 0) return vAutoSwitchByTyping && HandleEnglishKeyForAutoSwitch();
     vAutoSwitchRequest = -1;

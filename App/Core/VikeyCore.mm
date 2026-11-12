@@ -122,7 +122,8 @@ extern "C" {
 
     struct AutoFixUndo {
         bool active;
-        int removeCount;           // characters to delete: the corrected word plus the break character
+        bool breakGone;            // the first Backspace took the break character; the next one undoes (D61)
+        int removeCount;           // characters to delete: the corrected word plus the break character (if still there)
         UniChar text[MAX_BUFF + 1]; // what to type back: the original word
         int textCount;
         int language;              // language before the automatic switch
@@ -971,11 +972,12 @@ extern "C" {
         }
         _autoFixUndo.removeCount = correctedCount + 1;
         _autoFixUndo.language = vLanguage;
+        _autoFixUndo.breakGone = false;
         _autoFixUndo.active = true;
     }
 
-    /// Backspace right after an automatic correction puts the original word back (like macOS
-    /// autocorrect) and returns to the previous language. The switch hotkey stays a plain switch,
+    /// A second Backspace right after an automatic correction (the first took the break key, D61) puts the
+    /// original word back and returns to the previous language. The switch hotkey stays a plain switch,
     /// because right after a correction it usually means "the next word is in the other language".
     static bool UndoAutoFixWithBackspace() {
         if (!_autoFixUndo.active) return false;
@@ -1240,12 +1242,15 @@ extern "C" {
         // the emoji picker reads raw keys for its search (it does its own Telex reading)
         if (vEmojiOpen) return event;
 
-        // Backspace right after an automatic correction undoes it; any other key or click ends that chance
+        // Backspace right after an automatic correction (D61): the first takes only the break key and keeps the
+        // correction ("được " ⌫ "," -> "được,"); a second one right after undoes it. Any other key or click ends that chance
+        bool keepUndo = false;
         if (type == kCGEventKeyDown && _keycode == KEY_DELETE && _autoFixUndo.active && !(OTHER_CONTROL_KEY)) {
-            if (UndoAutoFixWithBackspace()) return NULL;
+            if (!_autoFixUndo.breakGone) { _autoFixUndo.breakGone = true; _autoFixUndo.removeCount--; keepUndo = true; }
+            else if (UndoAutoFixWithBackspace()) return NULL;
         }
         if (type == kCGEventKeyDown || type == kCGEventLeftMouseDown || type == kCGEventRightMouseDown) {
-            _autoFixUndo.active = false;
+            _autoFixUndo.active = keepUndo;
             if (type == kCGEventKeyDown) TLNoteKey(_keycode, _flag); else TLNoteClick();
         }
 
