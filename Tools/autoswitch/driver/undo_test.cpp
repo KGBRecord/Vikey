@@ -27,6 +27,8 @@ int main() {
         {"currentState <.", "currentState.", "Backspace to add punctuation keeps the fix"},
         {"dessert ", "dessert ", "keep the typed word even when desert is also English"},
         {"dessert <<", "desert", "Undo the doubled-key repair"},
+        {"merge <,", "merge,", "Vietnamese mode, English word: Backspace to add a comma keeps the English (Tony 2026-11-12)"},
+        {"merge <<", "mẻge", "second Backspace puts the Vietnamese back"},
         {"Sapa ", "Sapa ", "restore an unlisted multi-syllable literal"},
         {"Sapa <", "Sapa", "first Backspace: only the space goes"},
         {"Sapa <,", "Sapa,", "Backspace to add a comma keeps the English word"},
