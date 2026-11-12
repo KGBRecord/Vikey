@@ -4,16 +4,15 @@
 <title>Vikey</title>
 <link>https://vikey.app</link>
 <item>
-<title>Vikey 1.0.32</title>
-<pubDate>Sun, 08 Nov 2026 06:30:37 +0000</pubDate>
-<sparkle:version>34</sparkle:version>
-<sparkle:shortVersionString>1.0.32</sparkle:shortVersionString>
+<title>Vikey 1.0.33</title>
+<pubDate>Thu, 12 Nov 2026 05:46:52 +0000</pubDate>
+<sparkle:version>35</sparkle:version>
+<sparkle:shortVersionString>1.0.33</sparkle:shortVersionString>
 <sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion>
 <description><![CDATA[<ul>
-<li>Mac: "resets" và các dạng từ tiếng Anh khác (số nhiều, quá khứ, -ing) không còn bị đổi thành tiếng Việt ("rêts").</li>
-<li>Mac: khi một từ được trả lại tiếng Anh, giữ đủ chữ bạn gõ (dessert, mousse, currentState, Sapa).</li>
+<li>Mac: nhấn ⌫ ngay sau một từ vừa được tự sửa giờ chỉ xoá dấu cách, từ vẫn giữ nguyên ("được " ⌫ "," → "được,"). Nhấn ⌫ thêm lần nữa để trả lại đúng chữ bạn gõ.</li>
 </ul>]]></description>
-<enclosure url="https://vikey.app/downloads/Vikey-1.0.32.dmg" type="application/octet-stream" sparkle:edSignature="VsuymWvDDnsGpRO7d1zCHx0m2PyPiNZAbdVwfRXWaEAUrmk0astwDCsbDFtyzKg1anhiAVrVw9FHPkZ7bGIVDw==" length="4862941"/>
+<enclosure url="https://vikey.app/downloads/Vikey-1.0.33.dmg" type="application/octet-stream" sparkle:edSignature="t1YaZWLbG4NDG4boCWLm9RcQfrcFw/Lgsl0kRcpG48pY6iRcdatuRmrnMHFByzT2a//7Vfl0QX7N4sQ3vw9KAA==" length="4863302"/>
 </item>
 <item>
 <title>Vikey 1.0.31 for Windows (x64)</title>
