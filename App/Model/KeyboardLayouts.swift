@@ -15,13 +15,16 @@ enum KeyboardLayouts {
 
     /// Every keyboard macOS knows (installed, enabled or not), sorted by name.
     static func installed() -> [Source] {
-        let filter = [kTISPropertyInputSourceIsSelectCapable as String: true] as CFDictionary
+        let filter = [kTISPropertyInputSourceIsSelectCapable as String: true,
+                      kTISPropertyInputSourceCategory as String: kTISCategoryKeyboardInputSource as String] as CFDictionary
         guard let list = TISCreateInputSourceList(filter, true)?.takeRetainedValue() as? [TISInputSource] else { return [] }
+        // layouts, modes of an input method (Hiragana...) and input methods without modes; not the synthetic Roman mode
+        let types: Set<String> = [kTISTypeKeyboardLayout as String, kTISTypeKeyboardInputMode as String,
+                                  kTISTypeKeyboardInputMethodWithoutModes as String]
         var seen = Set<String>()
         return list.compactMap { src in
             guard let id = string(src, kTISPropertyInputSourceID), seen.insert(id).inserted else { return nil }
-            let type = string(src, kTISPropertyInputSourceType)
-            guard type == (kTISTypeKeyboardLayout as String) || type == (kTISTypeKeyboardInputMode as String) else { return nil }
+            guard let type = string(src, kTISPropertyInputSourceType), types.contains(type) else { return nil }
             let enabled = TISGetInputSourceProperty(src, kTISPropertyInputSourceIsEnabled).map {
                 CFBooleanGetValue(Unmanaged<CFBoolean>.fromOpaque($0).takeUnretainedValue())
             } ?? false
