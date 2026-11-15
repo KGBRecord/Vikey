@@ -7,7 +7,7 @@ Status values: **Shipped** (in a build Tony has), **Agreed** (decided, not built
 
 ## 62. Enter sends what's on screen
 
-**Status:** Agreed (2026-11-15, Tony's report). Built, not released yet.
+**Status:** Shipped in 1.0.34 (Mac), 2026-11-15 (Tony's report). Windows, Linux and the phones not released yet.
 
 **Problem.** In English mode in Chrome's address bar, Tony typed "ver" and pressed Enter. Chrome was showing "vercel.com" with "cel.com" highlighted. Enter is a word end, so auto switch checked "ver", found no English word before it, and made it "vẻ". Fixing the word removed the highlighted completion, so Chrome searched Google for "vẻ" instead of opening vercel.com. "ver" is also a common word in programming (version).
 
