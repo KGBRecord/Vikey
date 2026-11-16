@@ -670,6 +670,11 @@ final class KeyboardViewController: UIInputViewController, KeyboardViewDelegate 
         willCorrect = autoCorrectOn && wordCaps < 2 && keepWord != typed && wordPrefix.count >= 3
             && typed.withCString { t in candidates.withUnsafeBufferPointer { VKShouldCorrect(t, $0.baseAddress!, n) } }
         pendingFix = willCorrect ? candidates.first.map { (cased(Self.text(of: $0)), $0.vietnamese == 1) } : nil
+        // English: ways to finish the word, ranked by the words before it (SuggestLM)
+        let lm = driver.language == 0 && !SuggestLM.shared.isEmpty ? SuggestLM.shared : nil
+        // letters that start English words aren't a typo: "resi" goes on to resident, not to "res"
+        if willCorrect, let lm, let fix = pendingFix,
+           lm.prefersFinishing(typed, over: fix.text, before: String((lastContext ?? "").dropLast(shownWord.count))) { willCorrect = false; pendingFix = nil }
         // "dont" → "don't" from the keys typed (in Vietnamese mode "thats" shows as "thát" until the end of
         // the word); a common Vietnamese word in Vietnamese mode stays ("im")
         let shownNow = shownWord
@@ -692,8 +697,19 @@ final class KeyboardViewController: UIInputViewController, KeyboardViewDelegate 
             guard cells.count < 3, !seen.contains(t.lowercased()) else { return }
             seen.insert(t.lowercased()); cells.append(Suggestion(text: t, highlighted: highlight))
         }
-        if willCorrect, let fix = pendingFix, !seen.contains(fix.text.lowercased()) {
+        if willCorrect, let fix = pendingFix, fix.text != shown, !cells.dropFirst().contains(where: { $0.text == fix.text }) {   // "i" → "I" shows too
             seen.insert(fix.text.lowercased()); cells.append(Suggestion(text: fix.text, highlighted: true))
+        }
+        if suggestionsOn, let lm {
+            // the system keyboard's way: while the letters start a word, ways to finish it come first
+            var finishes = lm.completions(typed, before: String((lastContext ?? "").dropLast(shown.count)), limit: 3)
+            // a whole word with little to finish it: its possessive, as the system keyboard offers ("darkness's")
+            if finishes.count < 2, lm.id(typed) != nil, !typed.hasSuffix("'s") { finishes.append(typed + "'s") }
+            for f in finishes {
+                let t = cased(f)
+                guard cells.count < 3, !seen.contains(t.lowercased()) else { break }
+                seen.insert(t.lowercased()); cells.append(Suggestion(text: t))
+            }
         }
         if suggestionsOn {
             // a typed word that isn't a word: fixes first; otherwise ways to finish it
@@ -1003,7 +1019,8 @@ extension KeyboardViewController {
 
     /// The table's next words at once; Apple Intelligence's best guess joins after a short pause (when it differs).
     private func nextWords(_ before: String) -> [String] {
-        var out = NextWords.shared.predict(before: before)
+        var out = driver.language == 0 && !SuggestLM.shared.isEmpty ? SuggestLM.shared.nextWords(before: before, limit: 3) : []
+        if out.isEmpty { out = NextWords.shared.predict(before: before) }
         let key = String(before.suffix(80))
         if AIAssist.available {
             if aiNextFor == key {
