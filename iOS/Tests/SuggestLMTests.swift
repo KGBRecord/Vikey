@@ -8,6 +8,24 @@ final class SuggestLMTests: XCTestCase {
 
     func testLoads() {   // a file this code can't read would silently leave the old suggestions
         XCTAssertGreaterThan(lm.wordCount, 50_000)
+        XCTAssertFalse(SuggestNN.shared.isEmpty)
+    }
+
+    func testNetworkReadsOnAndStartsOver() {
+        let nn = SuggestNN.shared
+        func top(_ before: String) -> String? {
+            guard let p = nn.next(after: before) else { return nil }
+            let k = (4..<nn.V).max { p[$0] < p[$1] }!
+            return (0..<lm.wordCount).first { nn.networkId($0) == k }.map(lm.form)
+        }
+        XCTAssertEqual(top("Thank "), "you")
+        XCTAssertEqual(top("Thank you so "), "much")   // read on from "Thank "
+        XCTAssertEqual(top("Thank you so "), "much")   // the same text: the same answer
+        XCTAssertEqual(top("I am going to the "), top("I am going to the "))
+        let p = nn.next(after: "See you ")!
+        var sum: Float = 0
+        for k in 0..<nn.V { sum += p[k] }
+        XCTAssertEqual(sum, 1, accuracy: 0.001)
     }
 
     func testCompletionsFollowTheContext() {

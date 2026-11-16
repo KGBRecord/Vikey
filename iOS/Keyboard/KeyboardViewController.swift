@@ -120,6 +120,8 @@ final class KeyboardViewController: UIInputViewController, KeyboardViewDelegate 
         super.viewWillAppear(animated)
         setAI(.none); selection = nil
         AIAssist.refresh()   // off the main thread: whether the model is there
+        // the English suggestion files, mapped and read ahead off the main thread: their first use would page in ~25 MB
+        DispatchQueue.global(qos: .utility).async { _ = SuggestLM.shared.isEmpty; _ = SuggestNN.shared.isEmpty }
         keyboard.animatesLanguage = false   // the pill takes the saved language without rolling while the keyboard comes up
         comingUp = true
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in

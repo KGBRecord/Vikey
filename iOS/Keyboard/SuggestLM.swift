@@ -7,6 +7,16 @@ import Foundation
 final class SuggestLM {
     static let shared = SuggestLM()
     private static let discount = 0.75
+    /// The share of a word's probability that comes from the next-word network (SuggestNN), which reads further
+    /// back than two words; the rest is the counts'. Tuned on the benchmark's dev set.
+    private static let networkShare = 0.5
+    private lazy var nn: SuggestNN? = { let n = SuggestNN.shared; return n.isEmpty ? nil : n }()
+    private lazy var wordOfNetworkId: [Int] = {   // the network's ids back to word ids
+        guard let nn else { return [] }
+        var m = [Int](repeating: -1, count: nn.V)
+        for w in 0..<wordCount { let k = nn.networkId(w); if k > 0 { m[k] = w } }
+        return m
+    }()
 
     private var data: NSData?
     private var base: UnsafeRawPointer?
@@ -23,6 +33,7 @@ final class SuggestLM {
             data = nil; base = nil; wordCount = 0; return
         }
         data = d; base = d.bytes
+        madvise(UnsafeMutableRawPointer(mutating: d.bytes), d.length, MADV_WILLNEED)   // read ahead, without waiting
         let h = { (i: Int) in Int(d.bytes.load(fromByteOffset: 8 + 4 * i, as: UInt32.self)) }
         let n = h(0), nTri = h(1), nBi = h(2), nTriE = h(3), blobBytes = h(4)
         wordCount = n; triCount = nTri; total = Double(h(5))
@@ -162,6 +173,13 @@ final class SuggestLM {
         }
     }
 
+    /// P(w) blended with the network's guess (nnp: its distribution after the same text).
+    private func blend(_ p: Double, _ w: Int, _ nnp: UnsafePointer<Float>?) -> Double {
+        guard let nnp, let nn else { return p }
+        let k = nn.networkId(w)
+        return (1 - Self.networkShare) * p + Self.networkShare * (k > 0 ? Double(nnp[k]) : 0)
+    }
+
     // MARK: the context
 
     /// The two tokens before the cursor's word as ids: words, <s> after . ! ? or a new line, <,> after , ; :.
@@ -207,7 +225,9 @@ final class SuggestLM {
         let k = Self.bytes(prefix), r = range(k)
         guard !r.isEmpty else { return [] }
         var best: [(Double, Int)] = []
-        scan(r, context(before)) { w, s in
+        let nnp = nn?.next(after: before)
+        scan(r, context(before)) { w, p in
+            let s = blend(p, w, nnp)
             if best.count == limit, s <= best[limit - 1].0 { return }
             if key(w).elementsEqual(k) { return }
             let at = best.firstIndex { s > $0.0 } ?? best.count
@@ -218,10 +238,10 @@ final class SuggestLM {
     }
 
     /// The likeliest next words after `before` (which ends with a space): the context's pairs (a triple kept for a
-    /// word is always kept as a pair too), and the most common words.
+    /// word is always kept as a pair too), the most common words, and the network's favourites.
     func nextWords(before: String, limit: Int) -> [String] {
         guard !isEmpty else { return [] }
-        let ctx = context(before)
+        let ctx = context(before), nnp = nn?.next(after: before)
         var best: [(Double, Int)] = []
         func consider(_ w: Int, _ s: Double) {
             if best.count == limit, s <= best[limit - 1].0 { return }
@@ -238,12 +258,20 @@ final class SuggestLM {
                 let w = u16(biIds, i)
                 while j < tri.upperBound, u16(triIds, j) < w { j += 1 }
                 let triple = j < tri.upperBound && u16(triIds, j) == w ? count(triCounts, j) : nil
-                consider(w, p(w, ctx, pair: count(biCounts, i), triple: triple))
+                consider(w, blend(p(w, ctx, pair: count(biCounts, i), triple: triple), w, nnp))
             }
         }
-        for k in 0..<64 {
-            let w = u16(top, k)
-            scan(w..<w + 1, ctx) { w, s in consider(w, s) }
+        var extra = (0..<64).map { u16(top, $0) }
+        if let nnp, let nn {   // the network's 16 likeliest words
+            var picks: [(Float, Int)] = []
+            for k in 4..<nn.V where picks.count < 16 || nnp[k] > picks[15].0 {
+                picks.append((nnp[k], k)); picks.sort { $0.0 > $1.0 }
+                if picks.count > 16 { picks.removeLast() }
+            }
+            extra += picks.compactMap { wordOfNetworkId[$0.1] >= 0 ? wordOfNetworkId[$0.1] : nil }
+        }
+        for w in extra {
+            scan(w..<w + 1, ctx) { w, p in consider(w, blend(p, w, nnp)) }
         }
         return best.map { form($0.1) }
     }

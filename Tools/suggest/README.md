@@ -28,6 +28,21 @@ Tools/suggest/score.py OUT_DIR/cases_dev.json OUT_DIR/apple_dev.jsonl OUT_DIR/vi
 
 Each run takes about 2.7 s per case on Apple's side (key taps through XCUITest) and a few seconds in all on Vikey's.
 
+## The model
+
+`iOS/Keyboard/SuggestLM.swift` ranks words. It blends two models, half each (`networkShare`):
+- **Word counts** (`SuggestEN.bin`, built by `pack_lm.py`): Katz back-off over triples, pairs and single words.
+- **A small LSTM** (`SuggestNN.bin`, built by `pack_nn.py`, run by `SuggestNN.swift`) that reads up to 32 tokens back.
+
+Both come from vikey-data `lm_en/`: `fetch_lm.py` and `merge.py` make the counts, `dump_tokens.py` and `train_nn.py` the network, and `eval_nn.py` scores the blend in Python against Apple's bar.
+
+Rebuild after retraining:
+
+```sh
+python3 Tools/suggest/pack_lm.py --src mix_r4 --minc 20
+~/.venvs/vikeydata/bin/python Tools/suggest/pack_nn.py --src mix_r4 --model lstm.pt   # after pack_lm: it maps to its word ids
+```
+
 ## Metrics
 
 The words a bar offers are its cells minus the word as typed (Apple quotes it: “resi”).
