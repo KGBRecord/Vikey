@@ -15,7 +15,8 @@ Both keyboards are typed on the same way: the text before the cursor is set by t
 ## Run
 
 ```sh
-# cases from text (one text per line); dev to tune on, test to report on
+# cases from text (one text per line); dev to tune on, test to report on. Also writes apple_in_{dev,test}.json,
+# the cases cut to [id, text, letters], which both runners read
 Tools/suggest/make_cases.py OUT_DIR text1.txt text2.txt --per-split 1000
 # Apple: a simulator set to the English (US) keyboard only (AppleKeyboards, AppleLocale, AppleLanguages)
 Tools/suggest/apple_run.sh <sim udid> OUT_DIR/apple_in_dev.json OUT_DIR/apple_dev.jsonl
@@ -23,8 +24,6 @@ Tools/suggest/apple_run.sh <sim udid> OUT_DIR/apple_in_dev.json OUT_DIR/apple_de
 Tools/suggest/vikey_run.sh <sim udid> OUT_DIR/apple_in_dev.json OUT_DIR/vikey_dev.jsonl
 Tools/suggest/score.py OUT_DIR/cases_dev.json OUT_DIR/apple_dev.jsonl OUT_DIR/vikey_dev.jsonl --show 30
 ```
-
-`apple_in_*.json` is the cases file cut to `[id, text, letters]`.
 
 Each run takes about 2.7 s per case on Apple's side (key taps through XCUITest) and a few seconds in all on Vikey's.
 

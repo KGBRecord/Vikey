@@ -11,15 +11,24 @@ For each case:
 - intended = the word the writer went on to type is offered (Vikey's rate, Apple's in brackets).
 Words compare case-blind, ’ as '. Apple's multi-word cells ("receipt so") and emoji are counted, and shown apart.
 """
-import json, sys
+import argparse, json, sys
 from collections import Counter
 
-args = sys.argv[1:]
-show = int(args[args.index('--show') + 1]) if '--show' in args else 0
-only = args[args.index('--kind') + 1] if '--kind' in args else None
-cases = {c[0]: c for c in json.load(open(args[0]))}
-apple = {j['id']: j['cells'] for j in map(json.loads, open(args[1]))}
-vikey = {j['id']: j for j in map(json.loads, open(args[2]))}
+ap = argparse.ArgumentParser(description='Score Vikey\'s suggestion bar against Apple\'s.')
+ap.add_argument('cases'); ap.add_argument('apple'); ap.add_argument('vikey')
+ap.add_argument('--show', type=int, default=0, help='list this many cases where Vikey missed one of Apple\'s words')
+ap.add_argument('--kind', choices=['part', 'full', 'next'])
+ap.add_argument('--partial', action='store_true', help='score the cases both runs read, when one stopped early')
+args = ap.parse_args()
+show, only = args.show, args.kind
+cases = {c[0]: c for c in json.load(open(args.cases))}
+apple = {j['id']: j['cells'] for j in map(json.loads, open(args.apple))}
+vikey = {j['id']: j for j in map(json.loads, open(args.vikey))}
+missing = {name: len(set(cases) - set(run)) for name, run in (('apple', apple), ('vikey', vikey))}
+if any(missing.values()):
+    msg = ', '.join(f'{n} lacks {k} of {len(cases)} cases' for n, k in missing.items() if k)
+    if not args.partial: sys.exit(f'{msg}: rerun, or --partial to score what both have')
+    print(f'PARTIAL: {msg}')
 
 def norm(s): return s.replace('’', "'").replace('‘', "'").strip('“”"').lower()
 def offered_apple(cells):
@@ -31,13 +40,14 @@ def fixes(cells): return [norm(t) for t, sel in cells if sel]
 tot = Counter(); by = {}
 misses = []
 for cid, c in cases.items():
-    if cid not in apple or cid not in vikey: continue
+    if cid not in apple or cid not in vikey:
+        continue
     kind = c[4]
     if only and kind != only: continue
     typed = norm(vikey[cid].get('typed', c[2]))
     A, V = offered_apple(apple[cid]), offered_vikey(vikey[cid], typed)
     k = by.setdefault(kind, Counter())
-    want = c[3].lower()
+    want = norm(c[3])
     for t in (tot, k):
         t['want_apple'] += want in A
         t['want_vikey'] += want in V

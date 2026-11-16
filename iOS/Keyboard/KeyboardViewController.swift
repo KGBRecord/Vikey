@@ -707,9 +707,9 @@ final class KeyboardViewController: UIInputViewController, KeyboardViewDelegate 
             var finishes = lm.completions(typed, before: String((lastContext ?? "").dropLast(shown.count)), limit: 3)
             // a whole word with little to finish it: its possessive, as the system keyboard offers ("darkness's")
             if finishes.count < 2, lm.id(typed) != nil, !typed.hasSuffix("'s") { finishes.append(typed + "'s") }
-            for f in finishes {
+            for f in finishes where cells.count < 3 {
                 let t = cased(f)
-                guard cells.count < 3, !seen.contains(t.lowercased()) else { break }
+                guard !seen.contains(t.lowercased()) else { continue }   // already shown (the highlighted fix, say)
                 seen.insert(t.lowercased()); cells.append(Suggestion(text: t))
             }
         }

@@ -7,8 +7,10 @@ Each case is [id, text before the cursor, letters to type]:
 - "part": a word cut after 1..len-1 of its letters (every keystroke equally likely),
 - "full": the whole word typed, before the space,
 - "next": nothing typed after a space (next-word predictions).
-Texts are split in two by line (dev to tune on, test to report), so no sentence is in both.
-Writes cases_dev.json and cases_test.json: lists of [id, context, letters, word, kind].
+Texts are split in two by line (dev to tune on, test to report), so no sentence is in both (repeated lines are
+kept once).
+Writes cases_<split>.json (lists of [id, context, letters, word, kind]) and apple_in_<split>.json ([id, context,
+letters]: what apple_run.sh and vikey_run.sh read).
 """
 import json, random, re, sys
 
@@ -20,20 +22,23 @@ out = args[0]
 rnd = random.Random(seed)
 KINDS = [('part', 0.7), ('full', 0.15), ('next', 0.15)]
 
-lines = []
-for f in files:
-    for l in open(f, encoding='utf-8'):
-        l = ' '.join(l.split())
-        if len(l.split()) >= 4: lines.append((f.split('/')[-1].split('.')[0], l))
-rnd.shuffle(lines)
-halves = {'dev': lines[0::2], 'test': lines[1::2]}
-
 def places(line):
     """Words that can be typed at a word start: letters only, after a space or at the start."""
     for m in re.finditer(r'[A-Za-z]+', line):
         s, e = m.span()
         if (s == 0 or line[s - 1] == ' ') and (e == len(line) or not line[e].isalnum()):
             yield s, m.group()
+
+lines, seen = [], set()
+for f in files:
+    for l in open(f, encoding='utf-8'):
+        l = ' '.join(l.split())
+        key = l.lower()
+        if len(l.split()) < 4 or key in seen or next(places(l), None) is None: continue
+        seen.add(key); lines.append((f.split('/')[-1].split('.')[0], l))
+rnd.shuffle(lines)
+halves = {'dev': lines[0::2], 'test': lines[1::2]}
+if not halves['test']: sys.exit('not enough lines with a word to type for two splits')
 
 for split, ls in halves.items():
     cases, n = [], 0
@@ -57,4 +62,5 @@ for split, ls in halves.items():
             letters = ''
         cases.append([f'{split}-{len(cases):04d}', ctx, letters, word, kind])
     json.dump(cases, open(f'{out}/cases_{split}.json', 'w'), ensure_ascii=False, indent=0)
+    json.dump([c[:3] for c in cases], open(f'{out}/apple_in_{split}.json', 'w'), ensure_ascii=False)
     print(split, len(cases), {k: sum(c[4] == k for c in cases) for k, _ in KINDS})
