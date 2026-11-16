@@ -613,6 +613,14 @@ final class KeyboardViewController: UIInputViewController, KeyboardViewDelegate 
         }
     }
 
+    /// Whether typed letters go to the English model: always in English mode; in Vietnamese mode when they can't
+    /// spell Vietnamese (Telex keys included: "tooi" can, "peop" can't; a word with Vietnamese letters can).
+    static func isEnglish(_ letters: String, inEnglishMode: Bool) -> Bool {
+        if inEnglishMode { return true }
+        guard !letters.isEmpty, letters.allSatisfy({ $0.isASCII && $0.isLetter }) else { return false }
+        return !letters.lowercased().withCString { VKIsVietnameseSpelling($0) }
+    }
+
     /// Capitalised like the typed word ("Teh" → "The").
     private func cased(_ s: String) -> String {
         shownWord.first?.isUppercase == true ? s.prefix(1).uppercased() + s.dropFirst() : s
@@ -672,8 +680,9 @@ final class KeyboardViewController: UIInputViewController, KeyboardViewDelegate 
         willCorrect = autoCorrectOn && wordCaps < 2 && keepWord != typed && wordPrefix.count >= 3
             && typed.withCString { t in candidates.withUnsafeBufferPointer { VKShouldCorrect(t, $0.baseAddress!, n) } }
         pendingFix = willCorrect ? candidates.first.map { (cased(Self.text(of: $0)), $0.vietnamese == 1) } : nil
-        // English: ways to finish the word, ranked by the words before it (SuggestLM)
-        let lm = driver.language == 0 && !SuggestLM.shared.isEmpty ? SuggestLM.shared : nil
+        // English: ways to finish the word, ranked by the words before it (SuggestLM). In Vietnamese mode too, for
+        // letters that can't be Vietnamese ("peop", "resi"; not "the", which can)
+        let lm = !SuggestLM.shared.isEmpty && Self.isEnglish(typed, inEnglishMode: driver.language == 0) ? SuggestLM.shared : nil
         // letters that start English words aren't a typo: "resi" goes on to resident, not to "res"
         if willCorrect, let lm, let fix = pendingFix,
            lm.prefersFinishing(typed, over: fix.text, before: String((lastContext ?? "").dropLast(shownWord.count))) { willCorrect = false; pendingFix = nil }
@@ -1021,7 +1030,10 @@ extension KeyboardViewController {
 
     /// The table's next words at once; Apple Intelligence's best guess joins after a short pause (when it differs).
     private func nextWords(_ before: String) -> [String] {
-        var out = driver.language == 0 && !SuggestLM.shared.isEmpty ? SuggestLM.shared.nextWords(before: before, limit: 3) : []
+        // English next words after an English word (in Vietnamese mode: one that can't be Vietnamese)
+        let last = NextWords.lastWords(before).last ?? ""
+        var out = !SuggestLM.shared.isEmpty && (driver.language == 0 || (Self.isEnglish(last, inEnglishMode: false) && SuggestLM.shared.id(last) != nil))
+            ? SuggestLM.shared.nextWords(before: before, limit: 3) : []
         if out.isEmpty { out = NextWords.shared.predict(before: before) }
         let key = String(before.suffix(80))
         if AIAssist.available {

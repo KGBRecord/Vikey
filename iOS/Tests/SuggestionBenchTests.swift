@@ -3,12 +3,14 @@ import UIKit
 
 /// The suggestion benchmark's Vikey side (Tools/suggest/README.md): each case through the real keyboard in English,
 /// a fresh keyboard opening on the case's text, its letters tapped, the bar printed as
-/// `VIKEY\t{"id", "cells": [[text, highlighted]...]}`. Runs only with CASES set (xcodebuild: TEST_RUNNER_CASES=<file>).
+/// `VIKEY\t{"id", "cells": [[text, highlighted]...]}`. Runs only with CASES set (xcodebuild: TEST_RUNNER_CASES=<file>);
+/// MODE=vi types the same English in Vietnamese mode (auto switch on).
 final class SuggestionBenchTests: XCTestCase {
     func testSuggestionBar() throws {
         guard let path = ProcessInfo.processInfo.environment["CASES"] else { throw XCTSkip("CASES not set") }
         let cases = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: URL(fileURLWithPath: path))) as? [[String]])
         let sender = KeyboardView()
+        let mode = ProcessInfo.processInfo.environment["MODE"] == "vi" ? 1 : 0
         var times: [Double] = [], slow: [(Double, String)] = []
         for c in cases {
             let p = CursorProxy()
@@ -19,7 +21,7 @@ final class SuggestionBenchTests: XCTestCase {
             vc.view.frame = CGRect(x: 0, y: 0, width: 402, height: 300)
             vc.view.layoutIfNeeded()
             vc.viewWillAppear(false)
-            vc.setLanguageForTests(0)
+            vc.setLanguageForTests(mode)
             for ch in c[2] { vc.keyboard(sender, didTap: .char(String(ch))) }
             let t0 = CACurrentMediaTime()
             vc.updateSuggestions()
