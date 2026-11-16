@@ -195,6 +195,37 @@ final class KeyboardPerformanceTests: XCTestCase {
         XCTAssertLessThan(us, Self.limit(2000), "suggestion strip takes \(Int(us)) µs per key")
     }
 
+    // English mode: the strip ranks with SuggestLM (word counts + the next-word network)
+    static let englishSample = String(repeating: "hey are you free tomorrow i was thinking we could grab lunch near the office and talk about the trip next month let me know what works ", count: 4)
+
+    func testTimePerKeyEnglish() {
+        let keys = Self.englishSample.count
+        let perKeyUs = bestOf(5) {
+            let (vc, _) = makeKeyboard(); vc.setLanguageForTests(0)
+            let start = CFAbsoluteTimeGetCurrent()
+            type(Self.englishSample, into: vc)
+            return (CFAbsoluteTimeGetCurrent() - start) / Double(keys) * 1e6
+        }
+        print("keyboard (English): \(Int(perKeyUs)) µs per key (best of 5)")
+        XCTAssertLessThan(perKeyUs, Self.limit(300), "keyboard logic takes \(Int(perKeyUs)) µs per key")
+    }
+
+    func testSuggestionTimePerKeyEnglish() {
+        var worst = 0.0
+        let us = bestOf(3) {
+            let (vc, _) = makeKeyboard(); vc.setLanguageForTests(0)
+            var total = 0.0, n = 0
+            for ch in Self.englishSample {
+                if ch == " " { vc.keyboard(sender, didTap: .space) } else { vc.keyboard(sender, didTap: .char(String(ch))) }
+                let t = CFAbsoluteTimeGetCurrent(); vc.updateSuggestions(); let d = CFAbsoluteTimeGetCurrent() - t
+                total += d; n += 1; worst = max(worst, d)
+            }
+            return total / Double(n) * 1e6
+        }
+        print("keyboard (English): suggestions \(Int(us)) µs per key (best of 3), slowest key \(Int(worst * 1e6)) µs")
+        XCTAssertLessThan(us, Self.limit(2000), "suggestion strip takes \(Int(us)) µs per key")
+    }
+
     func testGapsBetweenKeysReceiveTouches() {
         // iOS drops touches on fully transparent parts of a keyboard: the view must never be clear
         let kb = KeyboardView(frame: CGRect(x: 0, y: 0, width: 402, height: 265))

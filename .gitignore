@@ -21,3 +21,4 @@ Windows/installer/out/
 Windows/installer/mkinst.cmd
 
 Windows/Tests/livetest.out
+Tools/suggest/AppleRef/AppleRef.xcodeproj/
