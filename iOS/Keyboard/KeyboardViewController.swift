@@ -121,7 +121,7 @@ final class KeyboardViewController: UIInputViewController, KeyboardViewDelegate 
         setAI(.none); selection = nil
         AIAssist.refresh()   // off the main thread: whether the model is there
         // the English suggestion files, mapped and read ahead off the main thread: their first use would page in ~25 MB
-        DispatchQueue.global(qos: .utility).async { _ = SuggestLM.shared.isEmpty; _ = SuggestNN.shared.isEmpty }
+        DispatchQueue.main.async { SuggestLM.prepare() }
         keyboard.animatesLanguage = false   // the pill takes the saved language without rolling while the keyboard comes up
         comingUp = true
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
@@ -658,7 +658,9 @@ final class KeyboardViewController: UIInputViewController, KeyboardViewDelegate 
         if gap > 0.05 { KBLog.add("stall \(Self.time(gap * 1000)) after key=\(Diag.lastKind)") }
     }
 
-    func updateSuggestions() {
+    /// The strip for the word being typed. `correctionOnly`: just decide what space would put in (willCorrect,
+    /// pendingFix), for a word ended before its strip came: the strip itself is about to give way to next words.
+    func updateSuggestions(correctionOnly: Bool = false) {
         suggestionsDirty = false
         if KeyboardView.barOn, correctsHere, showSpecialSuggestions() { return }
         guard KeyboardView.barOn, correctsHere, !wordPrefix.isEmpty, !shownWord.isEmpty else {
@@ -698,8 +700,24 @@ final class KeyboardViewController: UIInputViewController, KeyboardViewDelegate 
         if autoCorrectOn, keepWord != typed, let r = textReplacements[typed] {   // the user's own shortcuts win
             pendingFix = (r, driver.language == 1); willCorrect = true
         }
-        var comp = [VKCandidate](repeating: VKCandidate(), count: 6)
-        let m = suggestionsOn ? typed.withCString { VKCompletions($0, vi, &comp, 6) } : 0
+        if correctionOnly { return }
+        // Vietnamese: the engine's ways to finish the keys (Telex-aware), its Vietnamese ones re-ranked by the words
+        // before them (SuggestLM.vietnamese)
+        let viLM = vi == 1 && lm == nil && !SuggestLM.vietnamese.isEmpty ? SuggestLM.vietnamese : nil
+        let maxComp = viLM == nil ? 6 : 10
+        var comp = [VKCandidate](repeating: VKCandidate(), count: maxComp)
+        let m = suggestionsOn ? typed.withCString { VKCompletions($0, vi, &comp, Int32(maxComp)) } : 0
+        if let viLM, m > 1 {
+            let found = Array(comp.prefix(Int(m)))
+            let p = viLM.probabilities(found.map { $0.vietnamese == 1 ? Self.text(of: $0) : "" },
+                                       before: String((lastContext ?? "").dropLast(shownWord.count)))
+            // Vietnamese words the model knows by its probability, then the rest as the engine had them
+            let order = found.indices.sorted { a, b in
+                let (pa, pb) = (found[a].vietnamese == 1 ? p[a] : -1, found[b].vietnamese == 1 ? p[b] : -1)
+                return pa != pb ? pa > pb : a < b
+            }
+            for (i, j) in order.enumerated() { comp[i] = found[j] }
+        }
         let shown = shownWord
         var cells: [Suggestion] = [Suggestion(text: shown, quoted: true)]
         var seen: Set<String> = [shown.lowercased()]
@@ -735,7 +753,7 @@ final class KeyboardViewController: UIInputViewController, KeyboardViewDelegate 
 
     /// Space after a word: put in the correction (like the system keyboard). Returns true when it typed the space itself.
     private func autoCorrectAtBreak(_ end: String = " ") -> Bool {
-        updateSuggestionsIfNeeded()       // typed faster than the strip: decide on the whole word now
+        if suggestionsDirty { updateSuggestions(correctionOnly: true) }   // typed faster than the strip: decide on the whole word now
         guard willCorrect, let fix = pendingFix else { return false }
         replaceWord(with: fix.text, vietnamese: fix.vietnamese, recordUndo: true, then: end)
         return true
@@ -1034,6 +1052,8 @@ extension KeyboardViewController {
         let last = NextWords.lastWords(before).last ?? ""
         var out = !SuggestLM.shared.isEmpty && (driver.language == 0 || (Self.isEnglish(last, inEnglishMode: false) && SuggestLM.shared.id(last) != nil))
             ? SuggestLM.shared.nextWords(before: before, limit: 3) : []
+        // Vietnamese next words from the Vietnamese model (in Vietnamese mode, when the last word isn't English)
+        if out.isEmpty, driver.language == 1, !SuggestLM.vietnamese.isEmpty { out = SuggestLM.vietnamese.nextWords(before: before, limit: 3) }
         if out.isEmpty { out = NextWords.shared.predict(before: before) }
         let key = String(before.suffix(80))
         if AIAssist.available {

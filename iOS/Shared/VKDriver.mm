@@ -124,8 +124,8 @@ int VKCompletions(const char *prefix, int vietnamese, VKCandidate *out, int max)
     int count = 0;
     for (int pass = 0; pass < 2; pass++) {
         int lang = pass == 0 ? vietnamese : !vietnamese;
-        char words[8][32]; int scores[8];
-        int n = vAutoSwitchCompletions(lang, prefix, words, scores, 8);
+        char words[16][32]; int scores[16];
+        int n = vAutoSwitchCompletions(lang, prefix, words, scores, 16);
         for (int i = 0; i < n && count < max; i++) {
             VKCandidate c = {};
             strncpy(c.letters, words[i], 31);

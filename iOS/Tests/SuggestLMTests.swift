@@ -8,11 +8,11 @@ final class SuggestLMTests: XCTestCase {
 
     func testLoads() {   // a file this code can't read would silently leave the old suggestions
         XCTAssertGreaterThan(lm.wordCount, 50_000)
-        XCTAssertFalse(SuggestNN.shared.isEmpty)
+        XCTAssertNotNil(lm.nn)
     }
 
     func testNetworkReadsOnAndStartsOver() {
-        let nn = SuggestNN.shared
+        let nn = lm.nn!
         func top(_ before: String) -> String? {
             guard let p = nn.next(after: before) else { return nil }
             let k = (4..<nn.V).max { p[$0] < p[$1] }!
