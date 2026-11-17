@@ -120,8 +120,6 @@ final class KeyboardViewController: UIInputViewController, KeyboardViewDelegate 
         super.viewWillAppear(animated)
         setAI(.none); selection = nil
         AIAssist.refresh()   // off the main thread: whether the model is there
-        // the English suggestion files, mapped and read ahead off the main thread: their first use would page in ~25 MB
-        DispatchQueue.main.async { SuggestLM.prepare() }
         keyboard.animatesLanguage = false   // the pill takes the saved language without rolling while the keyboard comes up
         comingUp = true
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
@@ -155,6 +153,7 @@ final class KeyboardViewController: UIInputViewController, KeyboardViewDelegate 
         stallWatch?.invalidate(); stallWatch = nil
         keyboard.feedback.stop()
         KBLog.flush()
+        SuggestLM.coolDown()
         setAI(.none)                   // a late answer must not open the preview off screen
         super.viewWillDisappear(animated)
     }
@@ -301,6 +300,8 @@ final class KeyboardViewController: UIInputViewController, KeyboardViewDelegate 
         keyboard.animatesLanguage = true
         hasAppeared = true
         comingUp = false; setContentVisible(true)
+        // the suggestion models, paged in now the keyboard is up; the strip uses them from then on (SuggestLM.warmUp)
+        SuggestLM.warmUp(vietnameseFirst: driver.language == 1) { [weak self] in self?.scheduleSuggestions() }
         keyboard.playMarkIntro()
         readSelection()   // opened onto text that's already selected
         if !showDebugNudge() { nudgeSoon(after: 2.3) }   // after the mark's intro
@@ -684,7 +685,7 @@ final class KeyboardViewController: UIInputViewController, KeyboardViewDelegate 
         pendingFix = willCorrect ? candidates.first.map { (cased(Self.text(of: $0)), $0.vietnamese == 1) } : nil
         // English: ways to finish the word, ranked by the words before it (SuggestLM). In Vietnamese mode too, for
         // letters that can't be Vietnamese ("peop", "resi"; not "the", which can)
-        let lm = !SuggestLM.shared.isEmpty && Self.isEnglish(typed, inEnglishMode: driver.language == 0) ? SuggestLM.shared : nil
+        let lm = SuggestLM.readyEN && !SuggestLM.shared.isEmpty && Self.isEnglish(typed, inEnglishMode: driver.language == 0) ? SuggestLM.shared : nil
         // letters that start English words aren't a typo: "resi" goes on to resident, not to "res"
         if willCorrect, let lm, let fix = pendingFix,
            lm.prefersFinishing(typed, over: fix.text, before: String((lastContext ?? "").dropLast(shownWord.count))) { willCorrect = false; pendingFix = nil }
@@ -709,7 +710,7 @@ final class KeyboardViewController: UIInputViewController, KeyboardViewDelegate 
         if correctionOnly { return }
         // Vietnamese: the engine's ways to finish the keys (Telex-aware), its Vietnamese ones re-ranked by the words
         // before them (SuggestLM.vietnamese)
-        let viLM = vi == 1 && lm == nil && !SuggestLM.vietnamese.isEmpty ? SuggestLM.vietnamese : nil
+        let viLM = vi == 1 && lm == nil && SuggestLM.readyVI && !SuggestLM.vietnamese.isEmpty ? SuggestLM.vietnamese : nil
         let maxComp = viLM == nil ? 6 : 10
         var comp = [VKCandidate](repeating: VKCandidate(), count: maxComp)
         let m = suggestionsOn ? typed.withCString { VKCompletions($0, vi, &comp, Int32(maxComp)) } : 0
@@ -1079,10 +1080,10 @@ extension KeyboardViewController {
     private func nextWords(_ before: String) -> [String] {
         // English next words after an English word (in Vietnamese mode: one that can't be Vietnamese)
         let last = NextWords.lastWords(before).last ?? ""
-        var out = !SuggestLM.shared.isEmpty && (driver.language == 0 || (Self.isEnglish(last, inEnglishMode: false) && SuggestLM.shared.id(last) != nil))
+        var out = SuggestLM.readyEN && !SuggestLM.shared.isEmpty && (driver.language == 0 || (Self.isEnglish(last, inEnglishMode: false) && SuggestLM.shared.id(last) != nil))
             ? SuggestLM.shared.nextWords(before: before, limit: 3) : []
         // Vietnamese next words from the Vietnamese model (in Vietnamese mode, when the last word isn't English)
-        if out.isEmpty, driver.language == 1, !SuggestLM.vietnamese.isEmpty { out = SuggestLM.vietnamese.nextWords(before: before, limit: 3) }
+        if out.isEmpty, driver.language == 1, SuggestLM.readyVI, !SuggestLM.vietnamese.isEmpty { out = SuggestLM.vietnamese.nextWords(before: before, limit: 3) }
         if out.isEmpty { out = NextWords.shared.predict(before: before) }
         let key = String(before.suffix(80))
         if AIAssist.available {

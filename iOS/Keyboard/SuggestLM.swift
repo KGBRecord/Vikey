@@ -38,7 +38,6 @@ final class SuggestLM {
             data = nil; base = nil; wordCount = 0; return
         }
         data = d; base = d.bytes
-        madvise(UnsafeMutableRawPointer(mutating: d.bytes), d.length, MADV_WILLNEED)   // read ahead, without waiting
         let h = { (i: Int) in Int(d.bytes.load(fromByteOffset: 8 + 4 * i, as: UInt32.self)) }
         let n = h(0), nTri = h(1), nBi = h(2), nTriE = h(3), blobBytes = h(4)
         wordCount = n; triCount = nTri; total = Double(h(5))
@@ -65,10 +64,62 @@ final class SuggestLM {
 
     var isEmpty: Bool { wordCount == 0 }
 
-    /// Maps both languages' files and their networks' (cheap: no reading) and has the OS read them ahead in the
-    /// background (madvise), so a first suggestion doesn't page in ~50 MB on the main thread. Main thread only:
-    /// the lazy network isn't thread-safe.
-    static func prepare() { for lm in [shared, vietnamese] where !lm.isEmpty { _ = lm.nn } }
+    // MARK: opening the keyboard
+
+    /// Whether a language's files (counts and network) are in memory, so using them can't stall a key. The keyboard
+    /// doesn't touch them until then: reading ~70 MB while it opened made it slow to come up, and iOS sometimes gave
+    /// up and showed its own keyboard instead (Tony, builds 57-59). Main thread only.
+    private(set) static var readyEN = false, readyVI = false
+    private static let warmQueue = DispatchQueue(label: "vikey.suggest.warm", qos: .utility)
+    private static var warming = false
+    private static var generation = 0          // a pass started before the keyboard last went away counts for nothing
+    private static var waiting: [() -> Void] = []   // told each time a language becomes ready
+
+    /// Pages the files in on a background queue (the keyboard's language first), then marks each language ready on
+    /// the main thread and calls `done` (also when it joins a pass already under way). Cheap when they're still in
+    /// memory from the last time. Main thread only.
+    static func warmUp(vietnameseFirst: Bool, done: @escaping () -> Void) {
+        guard !(readyEN && readyVI) else { return }
+        waiting.append(done)
+        guard !warming else { return }
+        warming = true
+        let pass = generation
+        let groups = [(vietnamese: false, names: ["SuggestEN", "SuggestNN"]), (vietnamese: true, names: ["SuggestVI", "SuggestVINN"])]
+        let order = vietnameseFirst ? groups.reversed() : groups
+        warmQueue.async {
+            for (n, g) in order.enumerated() {
+                var sum = 0
+                for name in g.names { sum &+= touchPages(name) }
+                DispatchQueue.main.async {
+                    pagesSeen &+= sum
+                    guard pass == generation else { return }
+                    if g.vietnamese { readyVI = true } else { readyEN = true }
+                    let callers = waiting
+                    if n == order.count - 1 { warming = false; waiting = [] }
+                    callers.forEach { $0() }
+                }
+            }
+        }
+    }
+    private static var pagesSeen = 0   // keeps the loads below
+
+    /// One load per memory page of a model file, through a mapping of its own: the pages come into the OS's file
+    /// cache, which the keyboard's own mappings share.
+    private static func touchPages(_ name: String) -> Int {
+        let url = Bundle.main.url(forResource: name, withExtension: "bin") ?? Bundle(for: SuggestLM.self).url(forResource: name, withExtension: "bin")
+        guard let d = url.flatMap({ try? NSData(contentsOf: $0, options: .alwaysMapped) }) else { return 0 }
+        let p = d.bytes.assumingMemoryBound(to: UInt8.self)
+        var sum = 0
+        for i in stride(from: 0, to: d.length, by: 16384) { sum &+= Int(p[i]) }
+        return sum
+    }
+
+    /// The keyboard went away: iOS may drop the pages before it's back, so the next opening pages them in again
+    /// (a pass still under way no longer counts).
+    static func coolDown() { readyEN = false; readyVI = false; generation += 1; warming = false; waiting = [] }
+
+    /// Tests: use the files at once.
+    static func warmUpNow() { readyEN = true; readyVI = true }
 
     // MARK: the file
 

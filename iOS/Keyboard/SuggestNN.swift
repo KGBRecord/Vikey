@@ -32,7 +32,6 @@ final class SuggestNN {
         let outB = o; o += 4 * v
         guard o == d.length else { return }   // not the layout this code reads
         data = d; base = d.bytes; V = v; E = e; H = hid; nWords = n
-        madvise(UnsafeMutableRawPointer(mutating: d.bytes), d.length, MADV_WILLNEED)   // read ahead, without waiting
         (self.nnOf, self.emb, self.wih, self.whh, self.bias, self.projW, self.projB, self.outB) = (nnOf, emb, wih, whh, bias, projW, projB, outB)
         hs = .allocate(capacity: hid); cs = .allocate(capacity: hid)
         gates = .allocate(capacity: 4 * hid); scratch = .allocate(capacity: 4 * hid)

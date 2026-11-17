@@ -8,6 +8,7 @@ import UIKit
 /// [id, text before, word]); TYPE_MODE=vi types in Vietnamese mode; TYPE_SX / TYPE_SY: scatter in points (9.9, 7.3:
 /// σ 0.25 key widths and 0.17 key heights, fitted to the Google TSI and How-We-Type tap data).
 final class TypingAccuracyTests: XCTestCase {
+    override func setUp() { super.setUp(); SuggestLM.warmUpNow() }   // as once the keyboard is up
     struct Gauss: RandomNumberGenerator {   // SplitMix64, so a case's taps are the same on every run
         var state: UInt64
         mutating func next() -> UInt64 {
