@@ -111,6 +111,9 @@ int VKCandidates(const char *typed, const float *xs, const float *ys, int vietna
     return count;
 }
 
+bool VKKeepTyped(const char *typed) { return TouchModel::keep(typed); }
+bool VKKeepWord(const char *typed) { return TouchModel::keepWord(typed); }
+
 bool VKShouldCorrect(const char *typed, const VKCandidate *c, int count) {
     std::vector<TMCandidate> t((size_t)count);
     for (int i = 0; i < count; i++) {

@@ -688,6 +688,12 @@ final class KeyboardViewController: UIInputViewController, KeyboardViewDelegate 
         // letters that start English words aren't a typo: "resi" goes on to resident, not to "res"
         if willCorrect, let lm, let fix = pendingFix,
            lm.prefersFinishing(typed, over: fix.text, before: String((lastContext ?? "").dropLast(shownWord.count))) { willCorrect = false; pendingFix = nil }
+        // English slips onto neighbouring keys, read back with the words before: fixes the engine's one-key edits
+        // miss ("rhonk" → think) or that the sentence makes clear ("want yo" → to, two letters included)
+        if autoCorrectOn, let lm, touched, wordCaps < 2, keepWord != typed, typed.count >= 2,
+           let fix = slipFix(lm, typed: typed, before: String((lastContext ?? "").dropLast(shownWord.count)), keys: rects) {
+            pendingFix = (cased(fix), false); willCorrect = true
+        }
         // "dont" → "don't" from the keys typed (in Vietnamese mode "thats" shows as "thát" until the end of
         // the word); a common Vietnamese word in Vietnamese mode stays ("im")
         let shownNow = shownWord
@@ -749,6 +755,23 @@ final class KeyboardViewController: UIInputViewController, KeyboardViewDelegate 
         if cells.count == 1 { cells[0].quoted = false }
         if !suggestionsOn && !willCorrect { cells = [] }
         keyboard.suggestions = cells
+    }
+
+    /// The word the taps of `typed` were most likely meant to spell, when that is clearly not `typed` itself: its
+    /// closeness to the taps plus its likelihood after `before` beats the typed letters' by a margin (more when the
+    /// typed letters are a word themselves). Never for shorthand the engine keeps, nor, in Vietnamese mode, letters that
+    /// spell Vietnamese (in English mode "mu" is a slip for "my", not mù).
+    static var slipMargin = 3.0, slipMarginWord = 4.0
+    private func slipFix(_ lm: SuggestLM, typed: String, before: String, keys: [VKKeyRect]) -> String? {
+        guard !typed.withCString({ driver.language == 0 ? VKKeepWord($0) : VKKeepTyped($0) }) else { return nil }
+        let reads = lm.readTaps(zip(wordXs, wordYs).map { (x: $0, y: $1) }, keys: keys, before: before)
+        guard let best = reads.first, best.word.lowercased() != typed else { return nil }
+        let typedIsWord = lm.id(typed) != nil
+        let typedScore = reads.first { $0.word.lowercased() == typed }?.score
+            ?? (typedIsWord ? log(max(lm.probabilities([typed], before: before)[0], 1e-12)) : -40)   // its own keys: closeness ~0
+        guard best.score - typedScore > (typedIsWord ? Self.slipMarginWord : Self.slipMargin) else { return nil }
+        // letters on their way to a likelier word ("peop" → people) aren't a slip for a word of their length ("prop")
+        return lm.prefersFinishing(typed, over: best.word, before: before) ? nil : best.word
     }
 
     /// Space after a word: put in the correction (like the system keyboard). Returns true when it typed the space itself.

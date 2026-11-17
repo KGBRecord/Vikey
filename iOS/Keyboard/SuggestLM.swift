@@ -245,6 +245,51 @@ final class SuggestLM {
         return c
     }
 
+    // MARK: slips
+
+    /// A word's letters from its taps, read back: every word whose letters each lie near their tap (as many letters as
+    /// taps: slips onto a neighbour, not missed or extra keys), with log closeness (a 2D Gaussian per tap, spread in
+    /// key widths and heights as the engine's TouchModel) and log P(word | before). Best first by their sum. Words
+    /// with more than `maxSlips` letters off their nearest key aren't looked at.
+    struct Reading { let word: String; let id: Int; let closeness: Double; let likelihood: Double; var score: Double { closeness + likelihood } }
+
+    func readTaps(_ taps: [(x: Float, y: Float)], keys: [VKKeyRect], before: String, maxSlips: Int = 2, limit: Int = 4,
+                  sigma: Float = 0.35, sigmaY: Float = 0.25) -> [Reading] {
+        guard !isEmpty, !taps.isEmpty, taps.count < 24 else { return [] }
+        // per tap: the letters close enough to have been meant (within ~3 spreads), closest first
+        var near: [[(UInt8, Double)]] = []
+        for t in taps {
+            var c: [(UInt8, Double)] = []
+            for k in keys {
+                let dx = (t.x - (k.x + k.w / 2)) / (k.w * sigma), dy = (t.y - (k.y + k.h / 2)) / (k.h * sigmaY)
+                let s = -0.5 * Double(dx * dx + dy * dy)
+                if s > -4.5 { c.append((UInt8(bitPattern: k.letter), s)) }
+            }
+            c.sort { $0.1 > $1.1 }
+            near.append(c)
+        }
+        var found: [(Int, Double)] = [], prefix: [UInt8] = []
+        func walk(_ i: Int, _ closeness: Double, _ slips: Int) {
+            if i == taps.count {
+                let w = lowerBound(prefix)
+                if w < wordCount, compare(w, prefix) == 0 { found.append((w, closeness)) }
+                return
+            }
+            for (j, (letter, s)) in near[i].enumerated() {
+                let sl = slips + (j == 0 ? 0 : 1)
+                if sl > maxSlips { continue }
+                prefix.append(letter)
+                if lowerBound(prefix) < lowerBound(prefix + [0xFF]) { walk(i + 1, closeness + s, sl) }   // some word starts so
+                prefix.removeLast()
+            }
+        }
+        walk(0, 0, 0)
+        guard !found.isEmpty else { return [] }
+        let p = probabilities(found.map { form($0.0) }, before: before)
+        return zip(found, p).map { Reading(word: form($0.0.0), id: $0.0.0, closeness: $0.0.1, likelihood: log(max($0.1, 1e-12))) }
+            .sorted { $0.score > $1.score }.prefix(limit).map { $0 }
+    }
+
     // MARK: suggestions
 
     /// The best ways to finish `prefix` after `before` (the text before the word), most likely first, as they show
