@@ -90,6 +90,7 @@ final class KeyboardPerformanceTests: XCTestCase {
             vc.viewWillAppear(false)
             vc.setLanguageForTests(mode)
             for c in word { vc.keyboard(sender, didTap: .char(String(c))) }
+            drainMainQueue()   // the time before the next touch: the strip and the next letter's chances
             let rects = vc.keyboardViewForTests.keyRects
             let ka = rects.first { $0.letter == CChar(a.asciiValue!) }!, kb = rects.first { $0.letter == CChar(b.asciiValue!) }!
             let at = CGPoint(x: CGFloat(ka.x + ka.w / 2) + CGFloat((kb.x + kb.w / 2) - (ka.x + ka.w / 2)) * share, y: CGFloat(ka.y + ka.h / 2) + dy)
@@ -141,6 +142,34 @@ final class KeyboardPerformanceTests: XCTestCase {
         XCTAssertEqual(touchBelow("x", after: "ma", mode: 1), "x")     // Telex: the tone
         // "than" already in the field when the keyboard opened, then k: the whole word counts ("thank")
         XCTAssertEqual(touchBelow("n", after: "k", mode: 0, tapModel: false, field: "than"), " ")
+    }
+
+    /// Vietnamese mid-word (D66, TapModel with SuggestLM.nextKeys): halfway between u and i after "th", the sentence
+    /// decides: "mùa th" goes on with u (mùa thu), "kỳ th" with i (kỳ thi). The engine alone typed u for both.
+    func testVietnameseMidWordTouchFollowsTheSentence() {
+        func midUI(after before: String, model: Bool) -> String {
+            KeyboardViewController.viTapModelOn = model
+            defer { KeyboardViewController.viTapModelOn = true }
+            let p = CursorProxy()
+            p.text = before; p.cursor = before.count
+            let vc = KeyboardViewController()
+            vc.proxy = p
+            vc.loadViewIfNeeded()
+            vc.view.frame = CGRect(x: 0, y: 0, width: 402, height: 300)
+            vc.view.layoutIfNeeded()
+            vc.viewWillAppear(false)
+            vc.setLanguageForTests(1)
+            for c in "th" { vc.keyboard(sender, didTap: .char(String(c))) }
+            drainMainQueue()
+            let rects = vc.keyboardViewForTests.keyRects
+            let u = rects.first { $0.letter == CChar(UInt8(ascii: "u")) }!, i = rects.first { $0.letter == CChar(UInt8(ascii: "i")) }!
+            let at = CGPoint(x: CGFloat((u.x + u.w / 2 + i.x + i.w / 2) / 2), y: CGFloat(u.y + u.h / 2))
+            if case .char(let l)? = vc.keyboardViewForTests.key(at: at)?.kind { return l }
+            return "?"
+        }
+        XCTAssertEqual(midUI(after: "mùa ", model: true), "u")
+        XCTAssertEqual(midUI(after: "kỳ ", model: true), "i")
+        XCTAssertEqual(midUI(after: "kỳ ", model: false), "u")
     }
 
     func testTypesCorrectly() {
@@ -406,9 +435,11 @@ final class KeyboardPerformanceTests: XCTestCase {
         var worst = 0.0, total = 0.0, n = 0
         for word in "the meeting is about the schedule for next week and i think we should prepare the slides tomorrow".split(separator: " ") {
             for c in word {
+                let reads = KeyboardViewController.oddsReads
                 let t0 = CACurrentMediaTime()
                 let k = kv.key(at: center(c))
                 let t = (CACurrentMediaTime() - t0) * 1e6
+                XCTAssertEqual(KeyboardViewController.oddsReads, reads, "the odds for \(word) were read at the touch")
                 worst = max(worst, t); total += t; n += 1
                 vc.keyboard(sender, didTap: k?.kind ?? .char(String(c)))
                 drainMainQueue()   // the time between keys: the strip and the next letter's chances
@@ -419,6 +450,56 @@ final class KeyboardPerformanceTests: XCTestCase {
         print(String(format: "touch (English): mean %.0f us, worst %.0f us", total / Double(n), worst))
         XCTAssertLessThan(total / Double(n), 150, "mean touch time (debug build)")
         XCTAssertLessThan(worst, 1500, "slowest touch (debug build)")
+    }
+
+    /// Vietnamese mid-word, a touch goes by TapModel with the next Telex key's chances (SuggestLM.nextKeys, read
+    /// between keys): the touch itself must stay quick, and so must the reading.
+    func testTouchTimeVietnamese() {
+        let (vc, _) = makeKeyboard()   // Vietnamese mode
+        let kv = vc.keyboardViewForTests
+        let rects = kv.keyRects
+        func near(_ c: Character) -> CGPoint {
+            let k = rects.first { $0.letter == CChar(c.asciiValue!) }!
+            return CGPoint(x: CGFloat(k.x + k.w * 0.95), y: CGFloat(k.y + k.h / 2))
+        }
+        var worst = 0.0, total = 0.0, n = 0, between = 0.0, times: [Double] = []
+        for (w, word) in "hoom nay tooi ddi hocj vaf nguwowif ta noi ddeen nhieeuf chuyeenj cuar cuoocj soongs".split(separator: " ").enumerated() {
+            for c in word {
+                let reads = KeyboardViewController.oddsReads
+                let t0 = CACurrentMediaTime()
+                let k = kv.key(at: near(c))
+                let t = (CACurrentMediaTime() - t0) * 1e6
+                if w > 0 { XCTAssertEqual(KeyboardViewController.oddsReads, reads, "the odds for \(word) were read at the touch") }
+                if w > 0 { worst = max(worst, t); total += t; n += 1; times.append(t) }   // the first word sets things up once
+                vc.keyboard(sender, didTap: k?.kind ?? .char(String(c)))
+                let t1 = CACurrentMediaTime()
+                drainMainQueue()
+                between = max(between, (CACurrentMediaTime() - t1) * 1e6)
+            }
+            vc.keyboard(sender, didTap: .space)
+            drainMainQueue()
+        }
+        times.sort()
+        print(String(format: "touch (Vietnamese): mean %.0f us, p90 %.0f us, worst %.0f us; strip + next key's chances, worst %.0f us", total / Double(n), times[times.count * 9 / 10], worst, between))
+        XCTAssertLessThan(total / Double(n), 150, "mean touch time (debug build)")
+        XCTAssertLessThan(worst, 1500, "slowest touch (debug build)")
+    }
+
+    /// Two thumbs overlapping: the previous key is finished inside the new touch, before anything runs between keys.
+    /// The touch must not read the next letter's chances itself (D65, D66): it keeps the engine's pick.
+    func testOverlappingTouchesDontReadTheOdds() {
+        for mode in [0, 1] {
+            let (vc, _) = makeKeyboard()
+            vc.setLanguageForTests(mode)
+            let kv = vc.keyboardViewForTests
+            let rects = kv.keyRects
+            vc.keyboard(sender, didTap: .char("t")); drainMainQueue()
+            vc.keyboard(sender, didTap: .char("h"))   // finished inside the next touch: nothing ran in between
+            let reads = KeyboardViewController.oddsReads
+            let e = rects.first { $0.letter == CChar(UInt8(ascii: "e")) }!
+            XCTAssertNotNil(kv.key(at: CGPoint(x: CGFloat(e.x + e.w * 0.95), y: CGFloat(e.y + e.h / 2))))
+            XCTAssertEqual(KeyboardViewController.oddsReads, reads, "mode \(mode)")
+        }
     }
 
     func testGapsBetweenKeysReceiveTouches() {

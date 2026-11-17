@@ -93,9 +93,11 @@ final class SuggestLM {
                 for name in g.names { sum &+= touchPages(name) }
                 let lm = g.vietnamese ? vietnamese : shared
                 let sums = sumsNeeded.contains(ObjectIdentifier(lm)) ? lm.runningSums() : nil   // reads only the mapped file
+                let telex = g.vietnamese && sums != nil ? lm.buildTelex() : nil
                 DispatchQueue.main.async {
                     pagesSeen &+= sum
                     if let sums, lm.cumulative == nil { lm.cumulative = sums }
+                    if let telex, lm.telex == nil { lm.telex = telex }
                     guard pass == generation else { return }
                     if g.vietnamese { readyVI = true } else { readyEN = true }
                     let callers = waiting
@@ -126,6 +128,7 @@ final class SuggestLM {
     static func warmUpNow() {
         readyEN = true; readyVI = true
         for lm in [shared, vietnamese] where !lm.isEmpty && lm.cumulative == nil { lm.cumulative = lm.runningSums() }
+        if !vietnamese.isEmpty, vietnamese.telex == nil { vietnamese.telex = vietnamese.buildTelex() }
     }
 
     // MARK: the file
@@ -419,6 +422,135 @@ final class SuggestLM {
         }
         let total = mass.reduce(0) { $0 + max($1, 0) }
         return total > 0 ? mass.map { max($0, 0) / total } : nil
+    }
+
+    // MARK: Vietnamese: the next Telex key
+
+    /// The commonest Vietnamese words spelled in Telex, sorted by their keys: marks where they sit (aa aw ee oo ow uw
+    /// dd), the tone (s f r x j) apart, since people type it at the end or in the middle. "ươ" also as "uow" (one w).
+    /// Built by warmUp off the main thread, set on the main thread; nil until then.
+    struct TelexIndex {
+        var keys: [UInt8] = [], start: [Int32] = [0], word: [Int32] = [], tone: [UInt8] = [], share: [Float] = []
+        var count: Int { word.count }
+        func key(_ i: Int) -> ArraySlice<UInt8> { keys[Int(start[i])..<Int(start[i + 1])] }
+    }
+    private(set) var telex: TelexIndex?
+
+    /// A word's Telex spellings (keys, tone key or 0, share of its count): "người" → nguwowi + f, nguowi + f.
+    static func telexSpellings(_ word: String) -> [([UInt8], UInt8, Float)] {
+        var base: [UInt8] = [], tone: UInt8 = 0
+        for u in word.lowercased().decomposedStringWithCanonicalMapping.unicodeScalars {
+            switch u.value {
+            case 0x61...0x7A: base.append(UInt8(u.value))
+            case 0x111: base += [100, 100]                                  // đ
+            case 0x302: if let l = base.last { base.append(l) }             // â ê ô
+            case 0x306, 0x31B: base.append(119)                             // ă, ơ ư: w
+            case 0x301: tone = 115
+            case 0x300: tone = 102
+            case 0x309: tone = 114
+            case 0x303: tone = 120
+            case 0x323: tone = 106
+            default: return []
+            }
+        }
+        guard !base.isEmpty else { return [] }
+        let uwow: [UInt8] = Array("uwow".utf8)
+        if let i = (0...max(base.count - 4, 0)).first(where: { base.count >= $0 + 4 && Array(base[$0..<$0 + 4]) == uwow }) {
+            var one = base; one.remove(at: i + 1)                           // uow
+            return [(base, tone, 0.5), (one, tone, 0.5)]
+        }
+        return [(base, tone, 1)]
+    }
+
+    fileprivate func buildTelex(limit: Int = 25000) -> TelexIndex {
+        let common = (0..<wordCount).sorted { u32(uni, $0) > u32(uni, $1) }.prefix(limit)
+        var entries: [([UInt8], UInt8, Int32, Float)] = []
+        for w in common { for (k, t, s) in Self.telexSpellings(form(w)) { entries.append((k, t, Int32(w), s)) } }
+        entries.sort { $0.0.lexicographicallyPrecedes($1.0) }
+        var t = TelexIndex()
+        for e in entries { t.keys += e.0; t.start.append(Int32(t.keys.count)); t.word.append(e.2); t.tone.append(e.1); t.share.append(e.3) }
+        return t
+    }
+
+    /// Words that follow the context, as P(w | context) - beta * P(w) (Katz: the rest is beta * P(w)), for the
+    /// Vietnamese next key: one slot per word id (~240 KB once), filled for the context's pairs and triples and
+    /// cleared again when the text before the word changes.
+    private var extra: [Float] = [], extraSet: [Int] = [], extraText: String?, extraBeta = 1.0
+    private func contextExtra(_ before: String) -> Double {
+        if extraText == before { return extraBeta }
+        if extra.isEmpty { extra = [Float](repeating: 0, count: wordCount) }
+        for w in extraSet { extra[w] = 0 }
+        extraSet.removeAll(keepingCapacity: true)
+        extraText = before; extraBeta = 1
+        let ctx = context(before)
+        guard let bRow = ctx.last, u32(biTotal, bRow) > 0 else { return 1 }
+        let n = Double(u32(biTotal, bRow)), bb = f32(biBeta, bRow)
+        var tb = 1.0
+        if let t = ctx.tri { tb = f32(triBeta, t) }
+        extraBeta = tb * bb
+        for i in u32(biStart, bRow)..<u32(biStart, bRow + 1) {
+            let w = u16(biIds, i)
+            extra[w] = Float(tb * ((count(biCounts, i) - Self.discount) / n - bb * p1(w))); extraSet.append(w)
+        }
+        if let t = ctx.tri {
+            let tn = Double(u32(triTotal, t))
+            for j in u32(triStart, t)..<u32(triStart, t + 1) {
+                let w = u16(triIds, j)
+                let p2 = bb * p1(w) + Double(extra[w]) / tb
+                extra[w] += Float((count(triCounts, j) - Self.discount) / tn - tb * p2); extraSet.append(w)
+            }
+        }
+        return extraBeta
+    }
+
+    /// The chance of each next key while a Vietnamese word is typed in Telex (`typed`: its keys so far) after
+    /// `before`: 26 keys, then the word ending (27). A pending tone can come next too (`toneNow` of the time while
+    /// letters remain). nil when no word in the index goes on from these keys.
+    func nextKeys(_ typed: String, before: String, toneNow: Double = 0.1) -> [Double]? {
+        guard let tx = telex, !typed.isEmpty else { return nil }
+        var base: [UInt8] = [], typedTone: UInt8 = 0, vowel = false
+        for b in typed.lowercased().utf8 {
+            if vowel, b == 115 || b == 102 || b == 114 || b == 120 || b == 106 {   // s f r x j
+                if typedTone == b { return nil }   // typed twice: the engine undoes the tone and stops reading Telex
+                typedTone = b; continue
+            }
+            if b == 97 || b == 101 || b == 105 || b == 111 || b == 117 || b == 121 { vowel = true }
+            base.append(b)
+        }
+        // the run of entries whose keys start with base
+        func lower(_ k: [UInt8], _ upper: Bool) -> Int {
+            var lo = 0, hi = tx.count
+            while lo < hi {
+                let m = (lo + hi) / 2, e = tx.key(m)
+                let less = upper ? (e.starts(with: k) || e.lexicographicallyPrecedes(k)) : e.lexicographicallyPrecedes(k)
+                if less { lo = m + 1 } else { hi = m }
+            }
+            return lo
+        }
+        let a = lower(base, false), b = lower(base, true)
+        guard a < b else { return nil }
+        let beta = contextExtra(before)
+        var out = [Double](repeating: 0, count: 27)
+        let L = base.count
+        for i in a..<b {
+            let w = Int(tx.word[i]), t = tx.tone[i]
+            if typedTone != 0 && t != typedTone { continue }
+            let p = (beta * p1(w) + Double(extra[w])) * Double(tx.share[i])
+            guard p > 0 else { continue }
+            let k = tx.key(i), pending = vowel && typedTone == 0 && t != 0   // a tone key acts only after a vowel
+            if k.count > L {
+                let c = Int(k[k.startIndex + L]) - 97
+                guard (0..<26).contains(c) else { continue }
+                out[c] += pending ? p * (1 - toneNow) : p
+                if pending { out[Int(t) - 97] += p * toneNow }
+            } else if pending {
+                out[Int(t) - 97] += p
+            } else {
+                out[26] += p
+            }
+        }
+        let total = out.reduce(0, +)
+        return total > 0 ? out.map { $0 / total } : nil
     }
 
     /// Running sums of P(w) over the ids (~240 KB): any run's share in two reads. Built by warmUp off the main

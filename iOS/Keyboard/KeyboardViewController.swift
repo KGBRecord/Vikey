@@ -84,7 +84,10 @@ final class KeyboardViewController: UIInputViewController, KeyboardViewDelegate 
         keyboard = KeyboardView(frame: view.bounds)
         keyboard.delegate = self
         keyboard.wordContext = { [unowned self] in (self.wordPrefix, self.driver.language == 1) }
-        keyboard.letterOdds = { [unowned self] in self.englishLetterOdds() }
+        keyboard.letterOdds = { [unowned self] in   // a touch only looks them up: read between keys
+            if let o = self.englishLetterOdds(compute: false) { return (o, false) }
+            return self.vietnameseKeyOdds(compute: false).map { ($0, true) }
+        }
         keyboard.wordEnds = { [unowned self] letter in self.wordEnds(before: letter) }
         keyboard.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(keyboard)
@@ -606,14 +609,36 @@ final class KeyboardViewController: UIInputViewController, KeyboardViewDelegate 
     /// English mode, a word under way (TapModel): the next letter's chances after the word's letters so far (all of
     /// them, as shown: also those typed before the keyboard opened) and the words before; one reading per keystroke.
     private var oddsCache: (key: String, odds: [Double]?)?
-    private func englishLetterOdds() -> [Double]? {
+    /// compute false (a touch): only what was read between keys; a miss (two thumbs overlapping: the previous key
+    /// finished in the same touch) leaves the engine's pick.
+    private func englishLetterOdds(compute: Bool = true) -> [Double]? {
         let word = shownWord
         guard driver.language == 0, emojiView?.searching != true, !word.isEmpty, word.allSatisfy({ $0.isASCII }), SuggestLM.readyEN,
               !SuggestLM.shared.isEmpty else { return nil }   // (the emoji search's own field isn't the document)
         let before = String((lastContext ?? "").dropLast(word.count)), key = before + "\u{1}" + word
         if let c = oddsCache, c.key == key { return c.odds }
+        guard compute else { return nil }
+        Self.oddsReads += 1
         let o = SuggestLM.shared.nextLetters(word.lowercased(), before: before)
         oddsCache = (key, o)
+        return o
+    }
+
+    /// Vietnamese mode, a word under way (TapModel, D66): the next Telex key's chances after the keys typed so far
+    /// and the words before; one reading per keystroke.
+    private var viOddsCache: (key: String, odds: [Double]?)?
+    static var viToneNow = 0.03   // how often a pending tone comes before the word's last letters
+    static var viTapModelOn = true
+    static var oddsReads = 0   // how often the next letter's chances were worked out (tests: never at a touch)
+    private func vietnameseKeyOdds(compute: Bool = true) -> [Double]? {
+        guard Self.viTapModelOn, driver.language == 1, emojiView?.searching != true, !wordPrefix.isEmpty, SuggestLM.readyVI,
+              !SuggestLM.vietnamese.isEmpty else { return nil }
+        let before = String((lastContext ?? "").dropLast(shownWord.count)), key = before + "\u{1}" + wordPrefix
+        if let c = viOddsCache, c.key == key { return c.odds }
+        guard compute else { return nil }
+        Self.oddsReads += 1
+        let o = SuggestLM.vietnamese.nextKeys(wordPrefix, before: before, toneNow: Self.viToneNow)
+        viOddsCache = (key, o)
         return o
     }
 
@@ -670,7 +695,7 @@ final class KeyboardViewController: UIInputViewController, KeyboardViewDelegate 
         guard suggestionsDirty else { return }
         let t0 = CACurrentMediaTime()
         updateSuggestions()
-        _ = englishLetterOdds()   // read now, between keys, for the next touch (TapModel)
+        _ = englishLetterOdds(); _ = vietnameseKeyOdds()   // read now, between keys, for the next touch (TapModel)
         Diag.suggestMs = max(Diag.suggestMs, (CACurrentMediaTime() - t0) * 1000)
     }
 
