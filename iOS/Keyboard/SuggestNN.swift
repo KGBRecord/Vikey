@@ -6,7 +6,7 @@ import Foundation
 /// are float32 in a memory-mapped file that vDSP reads in place (clean pages, not the keyboard's footprint). The state
 /// is kept between calls, so a new word costs one LSTM step and one pass over the output layer.
 final class SuggestNN {
-    static let shared = SuggestNN()
+    private unowned let words: SuggestLM   // whose words the network's ids map to
 
     private var data: NSData?
     private var base: UnsafeRawPointer?
@@ -14,8 +14,9 @@ final class SuggestNN {
     private var nWords = 0
     private var nnOf = 0, emb = 0, wih = 0, whh = 0, bias = 0, projW = 0, projB = 0, outB = 0
 
-    init(bundle: Bundle = .main) {
-        let url = bundle.url(forResource: "SuggestNN", withExtension: "bin") ?? Bundle(for: SuggestNN.self).url(forResource: "SuggestNN", withExtension: "bin")
+    init(name: String, words: SuggestLM, bundle: Bundle = .main) {
+        self.words = words
+        let url = bundle.url(forResource: name, withExtension: "bin") ?? Bundle(for: SuggestNN.self).url(forResource: name, withExtension: "bin")
         guard let d = url.flatMap({ try? NSData(contentsOf: $0, options: .alwaysMapped) }), d.length > 24,
               String(decoding: Data(bytes: d.bytes, count: 8), as: UTF8.self) == "VKNN0001" else { return }
         let h = { (i: Int) in Int(d.bytes.load(fromByteOffset: 8 + 4 * i, as: UInt32.self)) }
@@ -83,7 +84,7 @@ final class SuggestNN {
         func emit(_ t: Int) { if (t == 1 || t == 3) && prev == t { return }; out.append(t); prev = t }
         func endWord() {
             guard !word.isEmpty else { return }
-            emit(SuggestLM.shared.id(word).map(networkId) ?? 0); word = ""
+            emit(words.id(word).map(networkId) ?? 0); word = ""
         }
         for ch in text {
             if ch.isLetter || ((ch == "'" || ch == "’") && !word.isEmpty) { word.append(ch); continue }

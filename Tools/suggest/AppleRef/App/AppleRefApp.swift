@@ -25,11 +25,11 @@ final class RefController: UIViewController {
         super.viewDidLoad()
         view.backgroundColor = .systemBackground
         if let path = ProcessInfo.processInfo.environment["CASES"], let data = FileManager.default.contents(atPath: path),
-           let list = try? JSONSerialization.jsonObject(with: data) as? [[String]] {
-            cases = list
+           let list = try? JSONSerialization.jsonObject(with: data) as? [[Any]] {
+            cases = list.map { $0.map { "\($0)" } }   // tap maps add numbers: only the first two fields are read
         }
         nextButton.setTitle("Next", for: .normal)
-        nextButton.accessibilityIdentifier = "next"
+        nextButton.accessibilityIdentifier = "appleref.next"
         nextButton.addTarget(self, action: #selector(loadNext), for: .touchUpInside)
         letters.accessibilityIdentifier = "letters"
         letters.text = "\(cases.count) cases"
@@ -54,6 +54,6 @@ final class RefController: UIViewController {
         let c = cases[index]
         text.text = c[1]
         text.selectedRange = NSRange(location: (c[1] as NSString).length, length: 0)
-        letters.text = "\(c[0])\t\(c[2])"
+        letters.text = "\(c[0])\t\(c.count > 2 ? c[2] : "")"
     }
 }

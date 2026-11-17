@@ -5,6 +5,19 @@ Each entry records what was asked, what was decided, and its status. Newest firs
 
 Status values: **Shipped** (in a build Tony has), **Agreed** (decided, not built yet), **Rejected**.
 
+## 63. Autocorrect reads slips onto neighbouring keys with the sentence (iOS, English)
+
+**Status:** Shipped in TestFlight 1.0.4 (58, 59), 2026-11-17 (Tony: "merge the PR").
+
+**Problem.** Tony: users feel they mistype more on Vikey than on the system keyboard. Measured in the simulator: 271 English words, every letter tapped with real finger scatter, the same taps on both keyboards. Tap areas weren't the gap (85% of points give the same letter; first letters come out right equally often). Autocorrect was: Apple fixed 56 of the 56 mistyped words, Vikey 52. D26 only tries one-key edits, and doesn't know the sentence.
+
+**Decision.** In English (English mode, or letters that can't be Vietnamese), at the space:
+- Every English word whose letters each lie near their tap is read back, up to two slips onto a neighbouring key. Each is scored by how close the taps were (D26's spread) and how likely the word is after the words before it (the English model in `SuggestLM`).
+- The best word replaces the typed letters when it beats them by a margin.
+- D26's limits still hold: never a real word (either language), a Vietnamese spelling, the keep-list, under 3 letters, or 2+ capitals; never letters on their way to a likelier word ("peop").
+
+**Result.** Offline (1,820 words from real sentences, `iOS/Tests/TypingAccuracyTests`): words right 95.5% → 96.9%, mistyped words fixed 94 → 120 of 175, correct words broken 1 → 1. Relaxing D26 for English mode (two-letter words, real words in context, Vietnamese-looking slips: "want yo" → to, "mu" → my) would give 98.7% and 152 of 175, and matched Apple on the 271 words (100% vs 99.6%). That relaxation was in TestFlight 58 and is Tony's call.
+
 ## 62. Enter sends what's on screen
 
 **Status:** Shipped in 1.0.34 (Mac), 2026-11-15 (Tony's report). Windows, Linux and the phones not released yet.

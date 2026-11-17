@@ -5,12 +5,16 @@ import Foundation
 /// (Tools/suggest: pack_lm.py builds SuggestEN.bin, README.md has the benchmark against the system keyboard).
 /// Memory-mapped: opening the keyboard reads nothing, a lookup touches a few pages.
 final class SuggestLM {
-    static let shared = SuggestLM()
+    static let shared = SuggestLM(name: "SuggestEN", network: "SuggestNN", networkShare: 0.5)
+    /// The same for Vietnamese (syllables; SuggestVI.bin and its network SuggestVINN.bin).
+    static let vietnamese = SuggestLM(name: "SuggestVI", network: "SuggestVINN", networkShare: 0.5)   // 0.25-0.75 all within noise
+    private let networkName: String
+    private let bundle: Bundle   // where the files are: the network comes from the same one
     private static let discount = 0.75
     /// The share of a word's probability that comes from the next-word network (SuggestNN), which reads further
-    /// back than two words; the rest is the counts'. Tuned on the benchmark's dev set.
-    private static let networkShare = 0.5
-    private lazy var nn: SuggestNN? = { let n = SuggestNN.shared; return n.isEmpty ? nil : n }()
+    /// back than two words; the rest is the counts'. Tuned on the benchmarks' dev sets.
+    private let networkShare: Double
+    private(set) lazy var nn: SuggestNN? = { let n = SuggestNN(name: networkName, words: self, bundle: bundle); return n.isEmpty ? nil : n }()
     private lazy var wordOfNetworkId: [Int] = {   // the network's ids back to word ids
         guard let nn else { return [] }
         var m = [Int](repeating: -1, count: nn.V)
@@ -26,8 +30,9 @@ final class SuggestLM {
     private var triKeys = 0, triStart = 0, triTotal = 0, triBeta = 0, triIds = 0, triCounts = 0
     private var top = 0   // the 64 most common words: next-word candidates in any context
 
-    init(bundle: Bundle = .main) {
-        let url = bundle.url(forResource: "SuggestEN", withExtension: "bin") ?? Bundle(for: SuggestLM.self).url(forResource: "SuggestEN", withExtension: "bin")
+    init(name: String, network: String, networkShare: Double, bundle: Bundle = .main) {
+        networkName = network; self.networkShare = networkShare; self.bundle = bundle
+        let url = bundle.url(forResource: name, withExtension: "bin") ?? Bundle(for: SuggestLM.self).url(forResource: name, withExtension: "bin")
         let d = url.flatMap { try? NSData(contentsOf: $0, options: .alwaysMapped) }
         guard let d, d.length > 32, String(decoding: Data(bytes: d.bytes, count: 8), as: UTF8.self) == "VKLM0002" else {
             data = nil; base = nil; wordCount = 0; return
@@ -60,6 +65,11 @@ final class SuggestLM {
 
     var isEmpty: Bool { wordCount == 0 }
 
+    /// Maps both languages' files and their networks' (cheap: no reading) and has the OS read them ahead in the
+    /// background (madvise), so a first suggestion doesn't page in ~50 MB on the main thread. Main thread only:
+    /// the lazy network isn't thread-safe.
+    static func prepare() { for lm in [shared, vietnamese] where !lm.isEmpty { _ = lm.nn } }
+
     // MARK: the file
 
     private func u32(_ section: Int, _ i: Int) -> Int { Int(base!.load(fromByteOffset: section + 4 * i, as: UInt32.self)) }
@@ -67,14 +77,6 @@ final class SuggestLM {
     /// A pair's or triple's count, kept as round(ln(count) * 2000).
     private func count(_ section: Int, _ i: Int) -> Double { exp(Double(u16(section, i)) / 2000) }
     private func f32(_ section: Int, _ i: Int) -> Double { Double(base!.load(fromByteOffset: section + 4 * i, as: Float32.self)) }
-
-    /// A word's key bytes (lowercase), up to its display form.
-    private func key(_ id: Int) -> UnsafeRawBufferPointer {
-        let s = u32(keyOffs, id), e = u32(keyOffs, id + 1)
-        var k = s
-        while k < e, base!.load(fromByteOffset: blob + k, as: UInt8.self) != 9 { k += 1 }
-        return UnsafeRawBufferPointer(start: base! + blob + s, count: k - s)
-    }
 
     /// How a word shows: "I", "YouTube", "don't".
     func form(_ id: Int) -> String {
@@ -84,17 +86,34 @@ final class SuggestLM {
         return String(decoding: all, as: UTF8.self)
     }
 
+    /// A word's key against `k`, in byte order (<0, 0, >0). memcmp, not Sequence comparisons: generic code is slow
+    /// in debug builds, where the timing tests run.
+    private func compare(_ id: Int, _ k: [UInt8]) -> Int {
+        let s = u32(keyOffs, id), e = u32(keyOffs, id + 1)
+        let p = base! + blob + s
+        let len = memchr(p, 9, e - s).map { UnsafeRawPointer($0) - p } ?? e - s
+        let c = k.withUnsafeBytes { memcmp(p, $0.baseAddress!, min(len, k.count)) }
+        return c != 0 ? Int(c) : len - k.count
+    }
+
     /// The first id whose key is >= `k` (byte order).
     private func lowerBound(_ k: [UInt8]) -> Int {
         var lo = 0, hi = wordCount
         while lo < hi {
             let mid = (lo + hi) / 2
-            if key(mid).lexicographicallyPrecedes(k) { lo = mid + 1 } else { hi = mid }
+            if compare(mid, k) < 0 { lo = mid + 1 } else { hi = mid }
         }
         return lo
     }
 
-    private static func bytes(_ s: String) -> [UInt8] { Array(s.lowercased().replacingOccurrences(of: "’", with: "'").utf8) }
+    private static func bytes(_ s: String) -> [UInt8] {
+        var out = [UInt8](); out.reserveCapacity(s.utf8.count)
+        for b in s.utf8 {   // plain ASCII (most English, every Telex key) without Foundation's work
+            guard b < 0x80 else { return Array(s.lowercased().replacingOccurrences(of: "’", with: "'").precomposedStringWithCanonicalMapping.utf8) }
+            out.append(b >= 65 && b <= 90 ? b + 32 : b)
+        }
+        return out
+    }
 
     /// The ids of the words that start with `prefix` (a contiguous range: keys are byte-sorted).
     private func range(_ prefix: [UInt8]) -> Range<Int> { lowerBound(prefix)..<lowerBound(prefix + [0xFF]) }
@@ -102,7 +121,7 @@ final class SuggestLM {
     func id(_ word: String) -> Int? {
         guard !isEmpty else { return nil }
         let k = Self.bytes(word), i = lowerBound(k)
-        return i < wordCount && key(i).elementsEqual(k) ? i : nil
+        return i < wordCount && compare(i, k) == 0 ? i : nil
     }
 
     /// How often the word was seen (0 when it isn't a word here).
@@ -177,7 +196,7 @@ final class SuggestLM {
     private func blend(_ p: Double, _ w: Int, _ nnp: UnsafePointer<Float>?) -> Double {
         guard let nnp, let nn else { return p }
         let k = nn.networkId(w)
-        return (1 - Self.networkShare) * p + Self.networkShare * (k > 0 ? Double(nnp[k]) : 0)
+        return (1 - networkShare) * p + networkShare * (k > 0 ? Double(nnp[k]) : 0)
     }
 
     // MARK: the context
@@ -188,24 +207,35 @@ final class SuggestLM {
         var tri: Int? = nil   // the triple table's row for (before, last), looked up once
     }
 
+    private var lastContext: (text: String, ctx: Context)?   // a word's keystrokes all share the text before it
+
     func context(_ text: String) -> Context {
         guard !isEmpty else { return Context() }
+        if let c = lastContext, c.text == text { return c.ctx }
+        let c = readContext(text)
+        lastContext = (text, c)
+        return c
+    }
+
+    private func readContext(_ text: String) -> Context {
         let sentence = wordCount, comma = wordCount + 1
         let tail = text.suffix(120)
         var toks: [Int?] = tail.count == text.count ? [sentence] : []   // a cut tail starts mid-sentence
-        var word = "", first = tail.count != text.count   // the cut's first word may be partial: dropped
+        var word = String.UnicodeScalarView(), first = tail.count != text.count   // the cut's first word may be partial: dropped
         func endWord() {
-            if !word.isEmpty { if !first { toks.append(id(word)) }; word = "" }
+            if !word.isEmpty { if !first { toks.append(id(String(word))) }; word = String.UnicodeScalarView() }
             first = false
         }
-        for ch in tail {
-            if ch.isLetter || ((ch == "'" || ch == "’") && !word.isEmpty) { word.append(ch); continue }
+        // by scalar, not Character: grapheme breaking costs more than the rest (a combining mark is a letter's part)
+        for ch in tail.unicodeScalars {
+            if ch.properties.isAlphabetic || ch.properties.generalCategory == .nonspacingMark
+                || ((ch == "'" || ch == "’") && !word.isEmpty) { word.append(ch); continue }
             endWord()
             switch ch {
             case ".", "!", "?", "\n": toks = [sentence]
             case ",", ";", ":": toks = [comma]
             case " ": break
-            default: if !("\"“(['‘".contains(ch) && toks == [sentence]) { toks = [nil] }   // a quote or bracket can open a sentence
+            default: if !("\"“(['‘".unicodeScalars.contains(ch) && toks == [sentence]) { toks = [nil] }   // a quote or bracket can open a sentence
             }
         }
         endWord()
@@ -214,6 +244,51 @@ final class SuggestLM {
         var c = Context(before: toks.count >= 2 ? toks[toks.count - 2] : nil, last: toks.last ?? nil)
         if let a = c.before, let b = c.last { c.tri = triIndex(a, b) }
         return c
+    }
+
+    // MARK: slips
+
+    /// A word's letters from its taps, read back: every word whose letters each lie near their tap (as many letters as
+    /// taps: slips onto a neighbour, not missed or extra keys), with log closeness (a 2D Gaussian per tap, spread in
+    /// key widths and heights as the engine's TouchModel) and log P(word | before). Best first by their sum. Words
+    /// with more than `maxSlips` letters off their nearest key aren't looked at.
+    struct Reading { let word: String; let id: Int; let closeness: Double; let likelihood: Double; var score: Double { closeness + likelihood } }
+
+    func readTaps(_ taps: [(x: Float, y: Float)], keys: [VKKeyRect], before: String, maxSlips: Int = 2, limit: Int = 4,
+                  sigma: Float = 0.35, sigmaY: Float = 0.25) -> [Reading] {
+        guard !isEmpty, !taps.isEmpty, taps.count < 24 else { return [] }
+        // per tap: the letters close enough to have been meant (within ~3 spreads), closest first
+        var near: [[(UInt8, Double)]] = []
+        for t in taps {
+            var c: [(UInt8, Double)] = []
+            for k in keys {
+                let dx = (t.x - (k.x + k.w / 2)) / (k.w * sigma), dy = (t.y - (k.y + k.h / 2)) / (k.h * sigmaY)
+                let s = -0.5 * Double(dx * dx + dy * dy)
+                if s > -4.5 { c.append((UInt8(bitPattern: k.letter), s)) }
+            }
+            c.sort { $0.1 > $1.1 }
+            near.append(c)
+        }
+        var found: [(Int, Double)] = [], prefix: [UInt8] = []
+        func walk(_ i: Int, _ closeness: Double, _ slips: Int) {
+            if i == taps.count {
+                let w = lowerBound(prefix)
+                if w < wordCount, compare(w, prefix) == 0 { found.append((w, closeness)) }
+                return
+            }
+            for (j, (letter, s)) in near[i].enumerated() {
+                let sl = slips + (j == 0 ? 0 : 1)
+                if sl > maxSlips { continue }
+                prefix.append(letter)
+                if lowerBound(prefix) < lowerBound(prefix + [0xFF]) { walk(i + 1, closeness + s, sl) }   // some word starts so
+                prefix.removeLast()
+            }
+        }
+        walk(0, 0, 0)
+        guard !found.isEmpty else { return [] }
+        let p = probabilities(found.map { form($0.0) }, before: before)
+        return zip(found, p).map { Reading(word: form($0.0.0), id: $0.0.0, closeness: $0.0.1, likelihood: log(max($0.1, 1e-12))) }
+            .sorted { $0.score > $1.score }.prefix(limit).map { $0 }
     }
 
     // MARK: suggestions
@@ -229,12 +304,25 @@ final class SuggestLM {
         scan(r, context(before)) { w, p in
             let s = blend(p, w, nnp)
             if best.count == limit, s <= best[limit - 1].0 { return }
-            if key(w).elementsEqual(k) { return }
+            if compare(w, k) == 0 { return }
             let at = best.firstIndex { s > $0.0 } ?? best.count
             best.insert((s, w), at: at)
             if best.count > limit { best.removeLast() }
         }
         return best.map { form($0.1) }
+    }
+
+    /// P(word) after `before` for each word, as the bar ranks them (counts and network blended); 0 for a word it
+    /// doesn't know.
+    func probabilities(_ words: [String], before: String) -> [Double] {
+        guard !isEmpty else { return words.map { _ in 0 } }
+        let ctx = context(before), nnp = nn?.next(after: before)
+        return words.map { word in
+            guard let w = id(word) else { return 0 }
+            var r = 0.0
+            scan(w..<w + 1, ctx) { w, p in r = blend(p, w, nnp) }
+            return r
+        }
     }
 
     /// The likeliest next words after `before` (which ends with a space): the context's pairs (a triple kept for a

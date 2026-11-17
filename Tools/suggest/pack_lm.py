@@ -2,7 +2,8 @@
 """Packs vikey-data's English n-gram counts (lm_en/: vocab.tsv, bi.tsv.gz, tri.tsv.gz, made by lm_en/fetch_lm.py from
 FineWeb and Reddit, see ACKNOWLEDGEMENTS.md) into iOS/Keyboard/SuggestEN.bin, which SuggestLM.swift memory-maps.
 
-    pack_lm.py [--src SUBDIR] [--minc 20]
+    pack_lm.py [--src SUBDIR] [--minc 20]                                  English: SuggestEN.bin
+    pack_lm.py --data ~/Work/vikey-data/lm_vi --out SuggestVI --minc 20    Vietnamese: SuggestVI.bin
 
 The model: Katz back-off, trigram -> bigram -> unigram. A pair or triple is kept when seen >= minc times; the rest of
 its context's mass (beta) goes to the order below, so dropping an entry costs little. Discount D = 0.75.
@@ -20,8 +21,10 @@ Layout, little-endian, every section 4-byte aligned:
   top u16[64]                 the most common words, next-word candidates in any context
 """
 import collections, gzip, math, os, struct, sys
-SRC = os.path.expanduser('~/Work/vikey-data/lm_en/' + (sys.argv[sys.argv.index('--src') + 1] if '--src' in sys.argv else ''))
-OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'iOS', 'Keyboard', 'SuggestEN.bin')
+SRC = os.path.expanduser(sys.argv[sys.argv.index('--data') + 1] if '--data' in sys.argv else
+                         '~/Work/vikey-data/lm_en/' + (sys.argv[sys.argv.index('--src') + 1] if '--src' in sys.argv else ''))
+NAME = sys.argv[sys.argv.index('--out') + 1] if '--out' in sys.argv else 'SuggestEN'
+OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'iOS', 'Keyboard', NAME + '.bin')
 MINC = int(sys.argv[sys.argv.index('--minc') + 1]) if '--minc' in sys.argv else 20
 MAXW = 60000   # word ids are u16
 D = 0.75
@@ -29,7 +32,7 @@ D = 0.75
 vocab = []
 for l in open(f'{SRC}/vocab.tsv', encoding='utf-8'):
     w, c, form = l.rstrip('\n').split('\t')
-    if len(w) == 1 and w not in ('a', 'i'): continue   # letters on their own aren't words to suggest
+    if len(w) == 1 and w.isascii() and w not in ('a', 'i'): continue   # letters on their own aren't words (ở, à are)
     vocab.append((w, int(c), form))
 vocab = sorted(vocab, key=lambda x: -x[1])[:MAXW]
 vocab.sort(key=lambda x: x[0].encode())
