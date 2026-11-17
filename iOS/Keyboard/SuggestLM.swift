@@ -5,14 +5,14 @@ import Foundation
 /// (Tools/suggest: pack_lm.py builds SuggestEN.bin, README.md has the benchmark against the system keyboard).
 /// Memory-mapped: opening the keyboard reads nothing, a lookup touches a few pages.
 final class SuggestLM {
-    static let shared = SuggestLM(name: "SuggestEN", network: "SuggestNN")
+    static let shared = SuggestLM(name: "SuggestEN", network: "SuggestNN", networkShare: 0.5)
     /// The same for Vietnamese (syllables; SuggestVI.bin and its network SuggestVINN.bin).
-    static let vietnamese = SuggestLM(name: "SuggestVI", network: "SuggestVINN")
+    static let vietnamese = SuggestLM(name: "SuggestVI", network: "SuggestVINN", networkShare: 0.5)   // 0.25-0.75 all within noise
     private let networkName: String
     private static let discount = 0.75
     /// The share of a word's probability that comes from the next-word network (SuggestNN), which reads further
-    /// back than two words; the rest is the counts'. Tuned on the benchmark's dev set.
-    private static let networkShare = 0.5
+    /// back than two words; the rest is the counts'. Tuned on the benchmarks' dev sets.
+    private let networkShare: Double
     private(set) lazy var nn: SuggestNN? = { let n = SuggestNN(name: networkName, words: self); return n.isEmpty ? nil : n }()
     private lazy var wordOfNetworkId: [Int] = {   // the network's ids back to word ids
         guard let nn else { return [] }
@@ -29,8 +29,8 @@ final class SuggestLM {
     private var triKeys = 0, triStart = 0, triTotal = 0, triBeta = 0, triIds = 0, triCounts = 0
     private var top = 0   // the 64 most common words: next-word candidates in any context
 
-    init(name: String, network: String, bundle: Bundle = .main) {
-        networkName = network
+    init(name: String, network: String, networkShare: Double, bundle: Bundle = .main) {
+        networkName = network; self.networkShare = networkShare
         let url = bundle.url(forResource: name, withExtension: "bin") ?? Bundle(for: SuggestLM.self).url(forResource: name, withExtension: "bin")
         let d = url.flatMap { try? NSData(contentsOf: $0, options: .alwaysMapped) }
         guard let d, d.length > 32, String(decoding: Data(bytes: d.bytes, count: 8), as: UTF8.self) == "VKLM0002" else {
@@ -195,7 +195,7 @@ final class SuggestLM {
     private func blend(_ p: Double, _ w: Int, _ nnp: UnsafePointer<Float>?) -> Double {
         guard let nnp, let nn else { return p }
         let k = nn.networkId(w)
-        return (1 - Self.networkShare) * p + Self.networkShare * (k > 0 ? Double(nnp[k]) : 0)
+        return (1 - networkShare) * p + networkShare * (k > 0 ? Double(nnp[k]) : 0)
     }
 
     // MARK: the context
