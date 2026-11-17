@@ -6,6 +6,7 @@ import UIKit
 /// `VIKEY\t{"id", "cells": [[text, highlighted]...]}`. Runs only with CASES set (xcodebuild: TEST_RUNNER_CASES=<file>);
 /// MODE=vi types the same English in Vietnamese mode (auto switch on).
 final class SuggestionBenchTests: XCTestCase {
+    override func setUp() { super.setUp(); SuggestLM.warmUpNow() }   // as once the keyboard is up
     func testSuggestionBar() throws {
         guard let path = ProcessInfo.processInfo.environment["CASES"] else { throw XCTSkip("CASES not set") }
         let cases = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: URL(fileURLWithPath: path))) as? [[String]])

@@ -3,6 +3,7 @@ import UIKit
 
 /// The English suggestion model (SuggestLM, SuggestEN.bin) and what the bar does with it.
 final class SuggestLMTests: XCTestCase {
+    override func setUp() { super.setUp(); SuggestLM.warmUpNow() }   // as once the keyboard is up
     private let lm = SuggestLM.shared
     private let sender = KeyboardView()
 
@@ -118,5 +119,30 @@ final class SuggestLMTests: XCTestCase {
     func testRealWordsAndShortWordsStay() {   // Decision 26's limits hold for slips too
         XCTAssertEqual(typeTaps([("h", "j", 0.3), ("i", nil, 0), ("t", nil, 0)], after: "It is very "), "hit ")   // a real word
         XCTAssertEqual(typeTaps([("y", "t", 0.4), ("o", nil, 0)], after: "I want "), "yo ")                       // under 3 letters
+    }
+
+    // Opening the keyboard doesn't touch the models: reading them then made it slow to come up, and iOS showed its
+    // own keyboard instead (Tony, builds 57-59). They're paged in once it's up, and the strip uses them from then on.
+    func testModelsWaitUntilTheKeyboardIsUp() {
+        SuggestLM.coolDown()
+        defer { SuggestLM.warmUpNow() }
+        let p = CursorProxy()
+        p.text = "I said "; p.cursor = 7
+        let vc = KeyboardViewController()
+        vc.proxy = p
+        vc.loadViewIfNeeded()
+        vc.view.frame = CGRect(x: 0, y: 0, width: 402, height: 300)
+        vc.view.layoutIfNeeded()
+        vc.viewWillAppear(false)
+        vc.setLanguageForTests(0)
+        for c in "resi" { vc.keyboard(sender, didTap: .char(String(c))) }
+        vc.updateSuggestions()   // the engine's strip until then
+        XCTAssertFalse(SuggestLM.readyEN || SuggestLM.readyVI)
+        vc.viewDidAppear(false)
+        let ready = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in SuggestLM.readyEN && SuggestLM.readyVI }, object: nil)
+        wait(for: [ready], timeout: 10)
+        vc.updateSuggestions()
+        let cells = vc.keyboardViewForTests.suggestions.map(\.text)
+        XCTAssertTrue(cells.dropFirst().allSatisfy { $0.hasPrefix("resi") } && cells.count == 3, "\(cells)")   // the model's ways to finish it
     }
 }

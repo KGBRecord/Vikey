@@ -22,6 +22,7 @@ class CountingProxy: NSObject, UITextDocumentProxy {
 }
 
 final class KeyboardPerformanceTests: XCTestCase {
+    override func setUp() { super.setUp(); SuggestLM.warmUpNow() }   // as once the keyboard is up
     // mixed Vietnamese/English, typed in Telex, ~2,000 keys
     static let sample = String(repeating: "tooi ddi hocj sorry em i love phowr order traf suwax nhes booking phongf chuaw meeting lucs ba giowf nhes mixx verr ", count: 18)
 
