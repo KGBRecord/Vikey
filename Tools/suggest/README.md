@@ -55,3 +55,16 @@ Gotchas:
 - A test method can't be named `testRun`: XCTest's `testRun` property takes its selector, and the method never runs.
 
 The test texts (in the private vikey-data repo, `suggest/`) are `synthetic/synthetic_en.txt` (LLM-written chat, notes and reviews) and `real/hn.txt` (Hacker News comments). Neither is in any count Vikey ships.
+
+## Key areas (D65)
+
+Which key a touch types, Vikey against Apple:
+```
+Tools/suggest/tapsample.py ~/Work/vikey-data/suggest/tap2/all.json          # 48 situations x 200 scattered touches
+TEST_RUNNER_TAPS=all.json xcodebuild test -project Tools/suggest/AppleRef/AppleRef.xcodeproj -scheme AppleRef -only-testing:AppleRefUITests/AppleRefUITests/testTapMap   # Apple keyboard on
+TEST_RUNNER_TAP_POINTS=all.json TEST_RUNNER_TAP_APPLE=apple_a.log,apple_b.log xcodebuild test ... -only-testing:VikeyTests/TapAreaBenchTests
+Tools/suggest/tapfit.py bench.log          # fit TapModel's numbers, every 4th situation held out ("learn": per-key biases)
+```
+Drop Apple's touches that came out as digits or symbols: a touch on 123 leaves Apple's keyboard on the numbers for the next cases.
+Apple agrees with itself 93.8% re-tapping the same points, so that is the ceiling.
+

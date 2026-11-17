@@ -76,6 +76,40 @@ final class KeyboardPerformanceTests: XCTestCase {
         XCTAssertEqual(Character(UnicodeScalar(UInt8(bitPattern: c))), "p")
     }
 
+    /// English mid-word (D65, TapModel): a touch near a border goes to the letter the sentence makes likely, as on
+    /// Apple's keyboard; the middle of a key always types it; Vietnamese mode and word starts keep the engine's pick.
+    func testEnglishMidWordTouchFollowsTheSentence() {
+        func keyAt(after text: String, typing word: String, mode: Int, between a: Character, _ b: Character, share: CGFloat = 0.5, dy: CGFloat = 0) -> String {
+            let p = CursorProxy()
+            p.text = text; p.cursor = text.count
+            let vc = KeyboardViewController()
+            vc.proxy = p
+            vc.loadViewIfNeeded()
+            vc.view.frame = CGRect(x: 0, y: 0, width: 402, height: 300)
+            vc.view.layoutIfNeeded()
+            vc.viewWillAppear(false)
+            vc.setLanguageForTests(mode)
+            for c in word { vc.keyboard(sender, didTap: .char(String(c))) }
+            let rects = vc.keyboardViewForTests.keyRects
+            let ka = rects.first { $0.letter == CChar(a.asciiValue!) }!, kb = rects.first { $0.letter == CChar(b.asciiValue!) }!
+            let at = CGPoint(x: CGFloat(ka.x + ka.w / 2) + CGFloat((kb.x + kb.w / 2) - (ka.x + ka.w / 2)) * share, y: CGFloat(ka.y + ka.h / 2) + dy)
+            if case .char(let l)? = vc.keyboardViewForTests.key(at: at)?.kind { return l }
+            return "?"
+        }
+        // a third of the way from u to i, low on the key, after "I want to th": the sentence says "think" and Apple types
+        // i there (measured); the engine, which sees only "th", typed u
+        XCTAssertEqual(keyAt(after: "I want to ", typing: "th", mode: 0, between: "u", "i", share: 0.33, dy: 14), "i")
+        KeyboardView.tapModelOn = false
+        XCTAssertEqual(keyAt(after: "I want to ", typing: "th", mode: 0, between: "u", "i", share: 0.33, dy: 14), "u")
+        KeyboardView.tapModelOn = true
+        // the middle of a key types it, however unlikely
+        XCTAssertEqual(keyAt(after: "I want to ", typing: "th", mode: 0, between: "u", "i", share: 0), "u")
+        // Vietnamese mode: the engine's pick, unchanged
+        XCTAssertEqual(keyAt(after: "Thank ", typing: "yo", mode: 1, between: "y", "u", share: 0.45),
+                       { KeyboardView.tapModelOn = false; defer { KeyboardView.tapModelOn = true }
+                         return keyAt(after: "Thank ", typing: "yo", mode: 1, between: "y", "u", share: 0.45) }())
+    }
+
     func testTypesCorrectly() {
         let (vc, p) = makeKeyboard()
         type("tooi ddi hocj sorry em ", into: vc)
@@ -317,6 +351,41 @@ final class KeyboardPerformanceTests: XCTestCase {
         }
         print("keyboard (English): suggestions \(Int(us)) µs per key (best of 3), slowest key \(Int(worst * 1e6)) µs")
         XCTAssertLessThan(us, Self.limit(2000), "suggestion strip takes \(Int(us)) µs per key")
+    }
+
+    private func drainMainQueue() {
+        var drained = false
+        DispatchQueue.main.async { drained = true }
+        while !drained { CFRunLoopRunInMode(.defaultMode, 0, true) }
+    }
+
+    /// English mid-word, a touch goes by TapModel, which needs the next letter's chances (SuggestLM.nextLetters, read
+    /// once per keystroke): the touch itself must stay quick.
+    func testTouchTimeEnglish() {
+        let (vc, _) = makeKeyboard()
+        vc.setLanguageForTests(0)
+        let kv = vc.keyboardViewForTests
+        let rects = kv.keyRects
+        func center(_ c: Character) -> CGPoint {
+            let k = rects.first { $0.letter == CChar(c.asciiValue!) }!
+            return CGPoint(x: CGFloat(k.x + k.w * 0.95), y: CGFloat(k.y + k.h / 2))   // near the right border: the model decides
+        }
+        var worst = 0.0, total = 0.0, n = 0
+        for word in "the meeting is about the schedule for next week and i think we should prepare the slides tomorrow".split(separator: " ") {
+            for c in word {
+                let t0 = CACurrentMediaTime()
+                let k = kv.key(at: center(c))
+                let t = (CACurrentMediaTime() - t0) * 1e6
+                worst = max(worst, t); total += t; n += 1
+                vc.keyboard(sender, didTap: k?.kind ?? .char(String(c)))
+                drainMainQueue()   // the time between keys: the strip and the next letter's chances
+            }
+            vc.keyboard(sender, didTap: .space)
+            drainMainQueue()
+        }
+        print(String(format: "touch (English): mean %.0f us, worst %.0f us", total / Double(n), worst))
+        XCTAssertLessThan(total / Double(n), 150, "mean touch time (debug build)")
+        XCTAssertLessThan(worst, 1500, "slowest touch (debug build)")
     }
 
     func testGapsBetweenKeysReceiveTouches() {

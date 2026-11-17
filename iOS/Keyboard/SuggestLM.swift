@@ -90,8 +90,11 @@ final class SuggestLM {
             for (n, g) in order.enumerated() {
                 var sum = 0
                 for name in g.names { sum &+= touchPages(name) }
+                let lm = g.vietnamese ? vietnamese : shared   // (static lets: safe to create here)
+                let sums = lm.isEmpty || lm.cumulative != nil ? nil : lm.runningSums()
                 DispatchQueue.main.async {
                     pagesSeen &+= sum
+                    if let sums, lm.cumulative == nil { lm.cumulative = sums }
                     guard pass == generation else { return }
                     if g.vietnamese { readyVI = true } else { readyEN = true }
                     let callers = waiting
@@ -119,7 +122,10 @@ final class SuggestLM {
     static func coolDown() { readyEN = false; readyVI = false; generation += 1; warming = false; waiting = [] }
 
     /// Tests: use the files at once.
-    static func warmUpNow() { readyEN = true; readyVI = true }
+    static func warmUpNow() {
+        readyEN = true; readyVI = true
+        for lm in [shared, vietnamese] where !lm.isEmpty && lm.cumulative == nil { lm.cumulative = lm.runningSums() }
+    }
 
     // MARK: the file
 
@@ -340,6 +346,84 @@ final class SuggestLM {
         let p = probabilities(found.map { form($0.0) }, before: before)
         return zip(found, p).map { Reading(word: form($0.0.0), id: $0.0.0, closeness: $0.0.1, likelihood: log(max($0.1, 1e-12))) }
             .sorted { $0.score > $1.score }.prefix(limit).map { $0 }
+    }
+
+    // MARK: the next letter
+
+    /// The chance of each next letter after `prefix` (the word's letters so far) and `before` (the text before the
+    /// word): the share of the words that go on with a…z (26 values), then the chance the word ends here (27th).
+    /// Word counts only (the network isn't needed for one letter). nil when no word starts so. One walk along the
+    /// context's pairs and triples in the prefix's run; the rest comes from running sums of the single-word counts.
+    func nextLetters(_ prefix: String, before: String) -> [Double]? {
+        guard !isEmpty else { return nil }
+        let k = Self.bytes(prefix), r = range(k)
+        guard !r.isEmpty else { return nil }
+        guard let cum = cumulative else { return nil }
+        let L = k.count
+        // the byte after the prefix in a word of r: -1 when the word is the prefix itself; non-decreasing along r
+        func next(_ w: Int) -> Int {
+            let s = u32(keyOffs, w), e = u32(keyOffs, w + 1)
+            guard L < e - s else { return -1 }
+            let b = Int((base! + blob + s).load(fromByteOffset: L, as: UInt8.self))
+            return b == 9 ? -1 : b
+        }
+        func bin(_ w: Int) -> Int { let b = next(w); return b < 0 ? 26 : b >= 97 && b <= 122 ? b - 97 : -1 }
+        func first(_ from: Int, atLeast b: Int) -> Int {   // the first id in from..<r.upperBound whose next byte >= b
+            var lo = from, hi = r.upperBound
+            while lo < hi { let m = (lo + hi) / 2; if next(m) < b { lo = m + 1 } else { hi = m } }
+            return lo
+        }
+        var runs = [Range<Int>](repeating: 0..<0, count: 27)   // each letter's run of ids
+        var lo = r.lowerBound
+        if lo < r.upperBound, next(lo) < 0 { runs[26] = lo..<lo + 1; lo += 1 }
+        lo = first(lo, atLeast: 97)
+        for c in 0..<26 where lo < r.upperBound {
+            let end = first(lo, atLeast: 98 + c)
+            runs[c] = lo..<end
+            lo = end
+        }
+        func uni(_ run: Range<Int>) -> Double { Double(cum[run.upperBound] - cum[run.lowerBound]) }
+        var mass = runs.map(uni)   // P(w) summed, before the context
+        let ctx = context(before)
+        if let bRow = ctx.last, u32(biTotal, bRow) > 0 {
+            let n = Double(u32(biTotal, bRow)), beta = f32(biBeta, bRow)
+            let bi = u32(biStart, bRow)..<u32(biStart, bRow + 1)
+            // pairs: p2 = (c - D) / n where (last, w) was kept, beta * p1 elsewhere
+            var p2 = mass.map { beta * $0 }
+            var i = lower(biIds, bi, r.lowerBound)
+            while i < bi.upperBound, u16(biIds, i) < r.upperBound {
+                let w = u16(biIds, i), c = bin(w)
+                if c >= 0 { p2[c] += (count(biCounts, i) - Self.discount) / n - beta * p1(w) }
+                i += 1
+            }
+            mass = p2
+            if let t = ctx.tri {
+                let tn = Double(u32(triTotal, t)), tb = f32(triBeta, t)
+                let tri = u32(triStart, t)..<u32(triStart, t + 1)
+                mass = p2.map { tb * $0 }
+                var j = lower(triIds, tri, r.lowerBound)
+                while j < tri.upperBound, u16(triIds, j) < r.upperBound {
+                    let w = u16(triIds, j), c = bin(w)
+                    if c >= 0 {
+                        let ip = lower(biIds, bi, w)
+                        let pw = ip < bi.upperBound && u16(biIds, ip) == w ? (count(biCounts, ip) - Self.discount) / n : beta * p1(w)
+                        mass[c] += (count(triCounts, j) - Self.discount) / tn - tb * pw
+                    }
+                    j += 1
+                }
+            }
+        }
+        let total = mass.reduce(0) { $0 + max($1, 0) }
+        return total > 0 ? mass.map { max($0, 0) / total } : nil
+    }
+
+    /// Running sums of P(w) over the ids (~240 KB): any run's share in two reads. Built by warmUp off the main
+    /// thread (reads only the mapped file), set on the main thread; nil until then.
+    private(set) var cumulative: [Float]?
+    fileprivate func runningSums() -> [Float] {
+        var out = [Float](repeating: 0, count: wordCount + 1), s = 0.0
+        for w in 0..<wordCount { s += p1(w); out[w + 1] = Float(s) }
+        return out
     }
 
     // MARK: suggestions

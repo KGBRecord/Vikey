@@ -84,6 +84,7 @@ final class KeyboardViewController: UIInputViewController, KeyboardViewDelegate 
         keyboard = KeyboardView(frame: view.bounds)
         keyboard.delegate = self
         keyboard.wordContext = { [unowned self] in (self.wordPrefix, self.driver.language == 1) }
+        keyboard.letterOdds = { [unowned self] in self.englishLetterOdds() }
         keyboard.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(keyboard)
         NSLayoutConstraint.activate([
@@ -601,6 +602,18 @@ final class KeyboardViewController: UIInputViewController, KeyboardViewDelegate 
     }
 
     /// The word before the cursor as it shows in the field (after Telex: "tôi" for "tooi").
+    /// English mode, a word under way (TapModel): the next letter's chances after the letters so far and the words
+    /// before; one reading per keystroke.
+    private var oddsCache: (key: String, odds: [Double]?)?
+    private func englishLetterOdds() -> [Double]? {
+        guard driver.language == 0, !wordPrefix.isEmpty, SuggestLM.readyEN, !SuggestLM.shared.isEmpty else { return nil }
+        let before = String((lastContext ?? "").dropLast(shownWord.count)), key = before + "\u{1}" + wordPrefix
+        if let c = oddsCache, c.key == key { return c.odds }
+        let o = SuggestLM.shared.nextLetters(wordPrefix.lowercased(), before: before)
+        oddsCache = (key, o)
+        return o
+    }
+
     private var shownWord: String {
         let c = lastContext ?? ""
         return String(c.reversed().prefix { $0.isLetter }.reversed())
@@ -639,6 +652,7 @@ final class KeyboardViewController: UIInputViewController, KeyboardViewDelegate 
         guard suggestionsDirty else { return }
         let t0 = CACurrentMediaTime()
         updateSuggestions()
+        _ = englishLetterOdds()   // read now, between keys, for the next touch (TapModel)
         Diag.suggestMs = max(Diag.suggestMs, (CACurrentMediaTime() - t0) * 1000)
     }
 
