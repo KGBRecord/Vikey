@@ -5,6 +5,31 @@ Each entry records what was asked, what was decided, and its status. Newest firs
 
 Status values: **Shipped** (in a build Tony has), **Agreed** (decided, not built yet), **Rejected**.
 
+## 65. English key areas follow the sentence mid-word, like Apple's (iOS)
+
+**Status:** Agreed (built, TestFlight 1.0.4 (62, 63)), 2026-11-17 (Tony: "I want the key tap areas to be as close to apple as possible, in english mode").
+
+**Measured.** Apple's keyboard in the simulator: 48 typing situations (word starts after a word, words half typed), 200 touches each, scattered like real taps (`Tools/suggest/tapsample.py`, AppleRef `testTapMap`). 9,282 usable. `iOS/Tests/TapAreaBenchTests` puts the same touches through Vikey's own touch code; it reproduces the live keyboard on 99.2% of points.
+- Vikey types the same key as Apple at 91.2% of touches: 93.7% at word starts, 88.6% mid-word.
+- Apple agrees with itself only 93.8% when the same 300 points are tapped again: its key areas change with use. Where it does agree with itself, Vikey matches 94.1%.
+- Mid-word, Apple makes the letters the sentence expects bigger ("I want to th": i for think).
+
+**Decision.** In English mode, while a word is under way, a touch on a letter, space, delete or shift goes by `TapModel`, fitted to Apple's touches (`Tools/suggest/tapfit.py`; every 4th situation held out):
+- Each nearby key scores how close the touch is plus how likely it is next. Closeness is a Gaussian, σ 0.30 key widths × 0.25 key heights, with touches counted 0.05 key heights higher. Likelihood comes from the English model, after the words before (`SuggestLM.nextLetters`, weight 0.6). For space it's the chance the word ends; delete and shift have small fixed odds.
+- Inside the middle 70% of a key, that key wins outright.
+- The letter odds are read between keys, after the strip, so a touch only looks them up.
+
+Word starts and Vietnamese mode keep the engine's pick. At word starts the model did worse (93.9% → 92.6%).
+
+**Space above the bar, both modes** (Tony: "thank you" often came out "thanknyou"). A touch between the bottom letters and the space bar types space when two things hold: the word so far is a word in either language, and no word goes on with that letter. Telex's x and z are excepted in Vietnamese mode (tones). Vikey used to split that gap in half. Apple gives it to space when the word looks finished, and keeps letters there while the word can go on. English mid-word, TapModel already weighs space against the letters.
+
+**Result.**
+- Held-out situations: mid-word 88.5% → 90.4% the same as Apple, all touches 91.3% → 92.2% (Apple vs itself: 93.8%).
+- Typing test (1,820 words, `TypingAccuracyTests`, now through the keyboard's own touch code): taps alone right 90.2% → 92.9%, mistyped words 179 → 129, right after autocorrect 96.7% → 97.7%, correct words broken 1 → 1.
+- Touch time in the debug build: mean 41 µs, worst 148 µs.
+
+**Locked by:** `KeyboardPerformanceTests.testSpaceAfterAFinishedWord` ("thank" + a touch under n: space in both modes; "tha": n; Vietnamese "ma" + under x: x); `KeyboardPerformanceTests.testEnglishMidWordTouchFollowsTheSentence`: a measured point between u and i after "I want to th" types i (Apple's answer), u with the model off; the middle of a key types it; Vietnamese mode is unchanged. `testTouchTimeEnglish`: mean under 150 µs, worst under 1.5 ms, debug build.
+
 ## 64. The keyboard opens without reading the suggestion models (iOS)
 
 **Status:** Shipped in TestFlight 1.0.4 (60, 61), 2026-11-17 (Tony: "add some test to make sure this never happen again").

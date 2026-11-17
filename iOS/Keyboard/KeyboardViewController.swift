@@ -84,6 +84,8 @@ final class KeyboardViewController: UIInputViewController, KeyboardViewDelegate 
         keyboard = KeyboardView(frame: view.bounds)
         keyboard.delegate = self
         keyboard.wordContext = { [unowned self] in (self.wordPrefix, self.driver.language == 1) }
+        keyboard.letterOdds = { [unowned self] in self.englishLetterOdds() }
+        keyboard.wordEnds = { [unowned self] letter in self.wordEnds(before: letter) }
         keyboard.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(keyboard)
         NSLayoutConstraint.activate([
@@ -601,6 +603,35 @@ final class KeyboardViewController: UIInputViewController, KeyboardViewDelegate 
     }
 
     /// The word before the cursor as it shows in the field (after Telex: "tôi" for "tooi").
+    /// English mode, a word under way (TapModel): the next letter's chances after the word's letters so far (all of
+    /// them, as shown: also those typed before the keyboard opened) and the words before; one reading per keystroke.
+    private var oddsCache: (key: String, odds: [Double]?)?
+    private func englishLetterOdds() -> [Double]? {
+        let word = shownWord
+        guard driver.language == 0, emojiView?.searching != true, !word.isEmpty, word.allSatisfy({ $0.isASCII }), SuggestLM.readyEN,
+              !SuggestLM.shared.isEmpty else { return nil }   // (the emoji search's own field isn't the document)
+        let before = String((lastContext ?? "").dropLast(word.count)), key = before + "\u{1}" + word
+        if let c = oddsCache, c.key == key { return c.odds }
+        let o = SuggestLM.shared.nextLetters(word.lowercased(), before: before)
+        oddsCache = (key, o)
+        return o
+    }
+
+    /// A touch between the bottom letters and the space bar: space when the word so far is a word (either language)
+    /// and none goes on with `letter`. Not for Telex's x and z in Vietnamese mode (tones).
+    private func wordEnds(before letter: String) -> Bool {
+        // the whole word: in English mode as shown (also letters typed before the keyboard opened), in Vietnamese
+        // mode its Telex keys
+        let w = (driver.language == 0 ? shownWord : wordPrefix).lowercased()
+        guard emojiView?.searching != true, w.count >= 2, w.allSatisfy({ $0.isASCII && $0.isLetter }), !(driver.language == 1 && (letter == "x" || letter == "z")) else { return false }
+        let en = SuggestLM.readyEN && !SuggestLM.shared.isEmpty
+        guard w.withCString({ VKIsWord(0, $0) || VKIsWord(1, $0) }) || (en && SuggestLM.shared.id(w) != nil) else { return false }
+        let next = w + letter.lowercased()
+        var out = [VKCandidate](repeating: VKCandidate(), count: 1)
+        let goesOn = next.withCString { VKCompletions($0, 0, &out, 1) > 0 || VKCompletions($0, 1, &out, 1) > 0 } || (en && SuggestLM.shared.startsWord(next))
+        return !goesOn
+    }
+
     private var shownWord: String {
         let c = lastContext ?? ""
         return String(c.reversed().prefix { $0.isLetter }.reversed())
@@ -639,6 +670,7 @@ final class KeyboardViewController: UIInputViewController, KeyboardViewDelegate 
         guard suggestionsDirty else { return }
         let t0 = CACurrentMediaTime()
         updateSuggestions()
+        _ = englishLetterOdds()   // read now, between keys, for the next touch (TapModel)
         Diag.suggestMs = max(Diag.suggestMs, (CACurrentMediaTime() - t0) * 1000)
     }
 

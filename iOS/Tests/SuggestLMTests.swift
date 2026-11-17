@@ -164,4 +164,23 @@ final class SuggestLMTests: XCTestCase {
         XCTAssertTrue(SuggestLM.readyEN && SuggestLM.readyVI)
         XCTAssertEqual(first, 2); XCTAssertEqual(second, 2)   // once per language
     }
+
+    func testNextLetters() throws {
+        let lm = SuggestLM.shared
+        let letters = Array("abcdefghijklmnopqrstuvwxyz") + ["·"]
+        func top(_ prefix: String, _ before: String) throws -> Character {
+            let d = try XCTUnwrap(lm.nextLetters(prefix, before: before))
+            XCTAssertEqual(d.count, 27); XCTAssertEqual(d.reduce(0, +), 1, accuracy: 1e-6)
+            return letters[d.indices.max { d[$0] < d[$1] }!]
+        }
+        XCTAssertEqual(try top("yo", "Thank "), "u")
+        XCTAssertEqual(try top("q", "I have a "), "u")
+        XCTAssertEqual(try top("th", "I said that in "), "e")   // the
+        XCTAssertEqual(try top("th", "I want to "), "i")         // think
+        let start = try XCTUnwrap(lm.nextLetters("", before: "I want to "))
+        XCTAssertGreaterThan(start[1], start[23])   // b (be, buy) over x
+        let t0 = CACurrentMediaTime()
+        for _ in 0..<20 { _ = lm.nextLetters("", before: "in the ") }
+        print("nextLetters at a word start after \"in the \": \((CACurrentMediaTime() - t0) / 20 * 1e6) us")
+    }
 }

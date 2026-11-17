@@ -2,11 +2,12 @@ import XCTest
 import UIKit
 
 /// Whole words typed by taps, offline (Tools/suggest README: the simulator version types on Apple's keyboard too):
-/// each letter is a tap at its key's centre plus finger scatter (Gaussian, seeded per case), the key picked as
-/// KeyboardView picks it (VKPickLetter: closeness and how likely each letter is next), the tap recorded for
-/// auto-correct, then space. Prints `TYPED\t{"id", "got"}` per case. Runs only with TYPE_CASES set (a file of
-/// [id, text before, word]); TYPE_MODE=vi types in Vietnamese mode; TYPE_SX / TYPE_SY: scatter in points (9.9, 7.3:
-/// σ 0.25 key widths and 0.17 key heights, fitted to the Google TSI and How-We-Type tap data).
+/// each letter is a tap at its key's centre plus finger scatter (Gaussian, seeded per case), the key it types as a
+/// touch there would (KeyboardView.key(at:): the engine's fat-finger pick, or TapModel in English mid-word; a touch
+/// can land on space or delete too), the tap recorded for auto-correct, then space. Prints `TYPED\t{"id", "got"}`
+/// per case. Runs only with TYPE_CASES set (a file of [id, text before, word]); TYPE_MODE=vi types in Vietnamese
+/// mode; TYPE_SX / TYPE_SY: scatter in points (9.9, 7.3: σ 0.25 key widths and 0.17 key heights, fitted to the
+/// Google TSI and How-We-Type tap data); TYPE_TAPMODEL=0 turns TapModel off.
 final class TypingAccuracyTests: XCTestCase {
     override func setUp() { super.setUp(); SuggestLM.warmUpNow() }   // as once the keyboard is up
     struct Gauss: RandomNumberGenerator {   // SplitMix64, so a case's taps are the same on every run
@@ -32,6 +33,8 @@ final class TypingAccuracyTests: XCTestCase {
         if let m = Double(env["TYPE_MARGIN"] ?? "") { KeyboardViewController.slipMargin = m }
         if env["TYPE_STRICT"] == "0" { KeyboardViewController.slipStrict = false }
         if let m = Double(env["TYPE_MARGIN_WORD"] ?? "") { KeyboardViewController.slipMarginWord = m }
+        KeyboardView.tapModelOn = env["TYPE_TAPMODEL"] != "0"
+        defer { KeyboardView.tapModelOn = true }
         let sender = KeyboardView()
         var spaceMs: [Double] = []
         for (n, c) in cases.enumerated() {
@@ -51,11 +54,11 @@ final class TypingAccuracyTests: XCTestCase {
             for ch in c[2].lowercased() {
                 guard let k = rects.first(where: { $0.letter == CChar(ch.asciiValue ?? 0) }) else { continue }
                 let x = Float(Double(k.x + k.w / 2) + rng.normal() * sx), y = Float(Double(k.y + k.h / 2) + rng.normal() * sy)
-                let picked = prefix.withCString { VKPickLetter(x, y, $0, Int32(mode), rects, Int32(rects.count)) }
-                let letter = picked != 0 ? String(UnicodeScalar(UInt8(bitPattern: picked))) : String(ch)
-                prefix += letter
-                kv.lastTapPoint = CGPoint(x: CGFloat(x), y: CGFloat(y))
-                vc.keyboard(sender, didTap: .char(letter))
+                let at = CGPoint(x: CGFloat(x), y: CGFloat(y))
+                guard let kind = kv.key(at: at)?.kind else { continue }   // the globe, the strip: the keyboard drops these touches
+                if case .char(let l) = kind { prefix += l } else { prefix += kind == .space ? " " : kind == .backspace ? "<" : "^" }
+                kv.lastTapPoint = at
+                vc.keyboard(sender, didTap: kind)
             }
             let t0 = CACurrentMediaTime()
             vc.keyboard(sender, didTap: .space)
