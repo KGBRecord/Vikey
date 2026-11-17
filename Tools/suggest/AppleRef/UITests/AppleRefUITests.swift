@@ -55,7 +55,7 @@ final class AppleRefUITests: XCTestCase {
         let app = XCUIApplication()
         app.launchEnvironment["CASES"] = path   // the same rows: [id, text before, ...]
         app.launch()
-        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 10))
+        _ = app.keyboards.firstMatch.waitForExistence(timeout: 10)   // a third-party keyboard isn't listed: no assert
         let intro = app.buttons["Continue"]
         if intro.waitForExistence(timeout: 2) { intro.tap() }
         let origin = app.coordinate(withNormalizedOffset: .zero)

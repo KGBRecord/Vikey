@@ -9,11 +9,12 @@ final class SuggestLM {
     /// The same for Vietnamese (syllables; SuggestVI.bin and its network SuggestVINN.bin).
     static let vietnamese = SuggestLM(name: "SuggestVI", network: "SuggestVINN", networkShare: 0.5)   // 0.25-0.75 all within noise
     private let networkName: String
+    private let bundle: Bundle   // where the files are: the network comes from the same one
     private static let discount = 0.75
     /// The share of a word's probability that comes from the next-word network (SuggestNN), which reads further
     /// back than two words; the rest is the counts'. Tuned on the benchmarks' dev sets.
     private let networkShare: Double
-    private(set) lazy var nn: SuggestNN? = { let n = SuggestNN(name: networkName, words: self); return n.isEmpty ? nil : n }()
+    private(set) lazy var nn: SuggestNN? = { let n = SuggestNN(name: networkName, words: self, bundle: bundle); return n.isEmpty ? nil : n }()
     private lazy var wordOfNetworkId: [Int] = {   // the network's ids back to word ids
         guard let nn else { return [] }
         var m = [Int](repeating: -1, count: nn.V)
@@ -30,7 +31,7 @@ final class SuggestLM {
     private var top = 0   // the 64 most common words: next-word candidates in any context
 
     init(name: String, network: String, networkShare: Double, bundle: Bundle = .main) {
-        networkName = network; self.networkShare = networkShare
+        networkName = network; self.networkShare = networkShare; self.bundle = bundle
         let url = bundle.url(forResource: name, withExtension: "bin") ?? Bundle(for: SuggestLM.self).url(forResource: name, withExtension: "bin")
         let d = url.flatMap { try? NSData(contentsOf: $0, options: .alwaysMapped) }
         guard let d, d.length > 32, String(decoding: Data(bytes: d.bytes, count: 8), as: UTF8.self) == "VKLM0002" else {

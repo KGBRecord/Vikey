@@ -83,4 +83,40 @@ final class SuggestLMTests: XCTestCase {
         let cells = bar(after: "I saw ", typing: "teh")
         XCTAssertTrue(cells.contains { $0.text == "the" && $0.highlighted }, "\(cells.map(\.text))")
     }
+
+    // autocorrect reads slips onto neighbouring keys with the sentence (D63)
+    private func typeTaps(_ taps: [(letter: Character, toward: Character?, share: CGFloat)], after text: String, mode: Int = 0) -> String {
+        let p = CursorProxy()
+        p.text = text; p.cursor = text.count
+        let vc = KeyboardViewController()
+        vc.proxy = p
+        vc.loadViewIfNeeded()
+        vc.view.frame = CGRect(x: 0, y: 0, width: 402, height: 300)
+        vc.view.layoutIfNeeded()
+        vc.viewWillAppear(false)
+        vc.setLanguageForTests(mode)
+        let kv = vc.keyboardViewForTests, rects = kv.keyRects
+        func center(_ c: Character) -> CGPoint {
+            let k = rects.first { $0.letter == CChar(c.asciiValue!) }!
+            return CGPoint(x: CGFloat(k.x + k.w / 2), y: CGFloat(k.y + k.h / 2))
+        }
+        for t in taps {   // the key typed is `letter`; the tap sits `share` of the way toward `toward`
+            var at = center(t.letter)
+            if let o = t.toward { let c = center(o); at.x += (c.x - at.x) * t.share; at.y += (c.y - at.y) * t.share }
+            kv.lastTapPoint = at
+            vc.keyboard(sender, didTap: .char(String(t.letter)))
+        }
+        vc.keyboard(sender, didTap: .space)
+        return String(p.text.dropFirst(text.count))
+    }
+
+    func testTwoKeySlipIsFixed() {   // "rhonk", the r and o tapped near t and i: think
+        let got = typeTaps([("r", "t", 0.35), ("h", nil, 0), ("o", "i", 0.35), ("n", nil, 0), ("k", nil, 0)], after: "I ")
+        XCTAssertEqual(got, "think ")
+    }
+
+    func testRealWordsAndShortWordsStay() {   // Decision 26's limits hold for slips too
+        XCTAssertEqual(typeTaps([("h", "j", 0.3), ("i", nil, 0), ("t", nil, 0)], after: "It is very "), "hit ")   // a real word
+        XCTAssertEqual(typeTaps([("y", "t", 0.4), ("o", nil, 0)], after: "I want "), "yo ")                       // under 3 letters
+    }
 }

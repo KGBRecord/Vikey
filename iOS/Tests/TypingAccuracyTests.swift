@@ -29,6 +29,7 @@ final class TypingAccuracyTests: XCTestCase {
         let mode = env["TYPE_MODE"] == "vi" ? 1 : 0
         let sx = Double(env["TYPE_SX"] ?? "") ?? 9.9, sy = Double(env["TYPE_SY"] ?? "") ?? 7.3
         if let m = Double(env["TYPE_MARGIN"] ?? "") { KeyboardViewController.slipMargin = m }
+        if env["TYPE_STRICT"] == "0" { KeyboardViewController.slipStrict = false }
         if let m = Double(env["TYPE_MARGIN_WORD"] ?? "") { KeyboardViewController.slipMarginWord = m }
         let sender = KeyboardView()
         var spaceMs: [Double] = []

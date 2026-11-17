@@ -690,7 +690,7 @@ final class KeyboardViewController: UIInputViewController, KeyboardViewDelegate 
            lm.prefersFinishing(typed, over: fix.text, before: String((lastContext ?? "").dropLast(shownWord.count))) { willCorrect = false; pendingFix = nil }
         // English slips onto neighbouring keys, read back with the words before: fixes the engine's one-key edits
         // miss ("rhonk" → think) or that the sentence makes clear ("want yo" → to, two letters included)
-        if autoCorrectOn, let lm, touched, wordCaps < 2, keepWord != typed, typed.count >= 2,
+        if autoCorrectOn, let lm, touched, wordCaps < 2, keepWord != typed, typed.count >= (Self.slipStrict ? 3 : 2),
            let fix = slipFix(lm, typed: typed, before: String((lastContext ?? "").dropLast(shownWord.count)), keys: rects) {
             pendingFix = (cased(fix), false); willCorrect = true
         }
@@ -762,8 +762,14 @@ final class KeyboardViewController: UIInputViewController, KeyboardViewDelegate 
     /// typed letters are a word themselves). Never for shorthand the engine keeps, nor, in Vietnamese mode, letters that
     /// spell Vietnamese (in English mode "mu" is a slip for "my", not mù).
     static var slipMargin = 3.0, slipMarginWord = 4.0
+    /// Decision 26's limits: never a real word (either language), a Vietnamese spelling or under 3 letters.
+    static var slipStrict = true
     private func slipFix(_ lm: SuggestLM, typed: String, before: String, keys: [VKKeyRect]) -> String? {
-        guard !typed.withCString({ driver.language == 0 ? VKKeepWord($0) : VKKeepTyped($0) }) else { return nil }
+        if Self.slipStrict {
+            guard !typed.withCString({ VKKeepTyped($0) || VKIsWord(0, $0) || VKIsWord(1, $0) }), lm.id(typed) == nil else { return nil }
+        } else {
+            guard !typed.withCString({ driver.language == 0 ? VKKeepWord($0) : VKKeepTyped($0) }) else { return nil }
+        }
         let reads = lm.readTaps(zip(wordXs, wordYs).map { (x: $0, y: $1) }, keys: keys, before: before)
         guard let best = reads.first, best.word.lowercased() != typed else { return nil }
         let typedIsWord = lm.id(typed) != nil
