@@ -608,7 +608,8 @@ final class KeyboardViewController: UIInputViewController, KeyboardViewDelegate 
     private var oddsCache: (key: String, odds: [Double]?)?
     private func englishLetterOdds() -> [Double]? {
         let word = shownWord
-        guard driver.language == 0, !word.isEmpty, word.allSatisfy({ $0.isASCII }), SuggestLM.readyEN, !SuggestLM.shared.isEmpty else { return nil }
+        guard driver.language == 0, emojiView?.searching != true, !word.isEmpty, word.allSatisfy({ $0.isASCII }), SuggestLM.readyEN,
+              !SuggestLM.shared.isEmpty else { return nil }   // (the emoji search's own field isn't the document)
         let before = String((lastContext ?? "").dropLast(word.count)), key = before + "\u{1}" + word
         if let c = oddsCache, c.key == key { return c.odds }
         let o = SuggestLM.shared.nextLetters(word.lowercased(), before: before)
@@ -619,8 +620,10 @@ final class KeyboardViewController: UIInputViewController, KeyboardViewDelegate 
     /// A touch between the bottom letters and the space bar: space when the word so far is a word (either language)
     /// and none goes on with `letter`. Not for Telex's x and z in Vietnamese mode (tones).
     private func wordEnds(before letter: String) -> Bool {
-        let w = wordPrefix.lowercased()
-        guard w.count >= 2, w.allSatisfy({ $0.isASCII && $0.isLetter }), !(driver.language == 1 && (letter == "x" || letter == "z")) else { return false }
+        // the whole word: in English mode as shown (also letters typed before the keyboard opened), in Vietnamese
+        // mode its Telex keys
+        let w = (driver.language == 0 ? shownWord : wordPrefix).lowercased()
+        guard emojiView?.searching != true, w.count >= 2, w.allSatisfy({ $0.isASCII && $0.isLetter }), !(driver.language == 1 && (letter == "x" || letter == "z")) else { return false }
         let en = SuggestLM.readyEN && !SuggestLM.shared.isEmpty
         guard w.withCString({ VKIsWord(0, $0) || VKIsWord(1, $0) }) || (en && SuggestLM.shared.id(w) != nil) else { return false }
         let next = w + letter.lowercased()
