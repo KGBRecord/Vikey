@@ -211,6 +211,9 @@ final class SuggestLMTests: XCTestCase {
         let d = try XCTUnwrap(vi.nextKeys("nhieeu", before: "rất "))   // rất nhiều: the tone comes next
         XCTAssertGreaterThan(d[5], d[26])
         XCTAssertNil(vi.nextKeys("qzx", before: ""))
+        XCTAssertNil(vi.nextKeys("bass", before: ""))   // s twice: no tone, no Telex any more
+        let ng = try XCTUnwrap(vi.nextKeys("ng", before: "những "))   // no vowel yet: no tone can come next
+        for t in "sfrxj" { XCTAssertEqual(ng[Int(t.asciiValue! - 97)], 0, "\(t)") }
         var worst = 0.0, total = 0.0, n = 0
         var before = ""
         for word in ["hoom", "nay", "tooi", "ddi", "hocj", "vaf", "nguwowif", "ta", "noi", "ddeen", "nhieeuf", "chuyeenj"] {

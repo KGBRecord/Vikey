@@ -75,6 +75,9 @@ final class TapAreaBenchTests: XCTestCase {
         vc.setLanguageForTests(0)
         vc.textDidChange(nil)
         for c in word { vc.keyboard(sender, didTap: .char(String(c).lowercased())) }
+        var drained = false   // the time between keys: the next letter's chances are read then (a touch only looks them up)
+        DispatchQueue.main.async { drained = true }
+        while !drained { CFRunLoopRunInMode(.defaultMode, 0, true) }
         vc.view.layoutIfNeeded()
         return (vc, vc.keyboardViewForTests)
     }

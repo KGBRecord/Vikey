@@ -510,7 +510,10 @@ final class SuggestLM {
         guard let tx = telex, !typed.isEmpty else { return nil }
         var base: [UInt8] = [], typedTone: UInt8 = 0, vowel = false
         for b in typed.lowercased().utf8 {
-            if vowel, b == 115 || b == 102 || b == 114 || b == 120 || b == 106 { typedTone = b; continue }   // s f r x j
+            if vowel, b == 115 || b == 102 || b == 114 || b == 120 || b == 106 {   // s f r x j
+                if typedTone == b { return nil }   // typed twice: the engine undoes the tone and stops reading Telex
+                typedTone = b; continue
+            }
             if b == 97 || b == 101 || b == 105 || b == 111 || b == 117 || b == 121 { vowel = true }
             base.append(b)
         }
@@ -534,7 +537,7 @@ final class SuggestLM {
             if typedTone != 0 && t != typedTone { continue }
             let p = (beta * p1(w) + Double(extra[w])) * Double(tx.share[i])
             guard p > 0 else { continue }
-            let k = tx.key(i), pending = typedTone == 0 && t != 0
+            let k = tx.key(i), pending = vowel && typedTone == 0 && t != 0   // a tone key acts only after a vowel
             if k.count > L {
                 let c = Int(k[k.startIndex + L]) - 97
                 guard (0..<26).contains(c) else { continue }

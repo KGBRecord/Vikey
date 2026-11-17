@@ -67,6 +67,9 @@ final class TypingAccuracyTests: XCTestCase {
                 if case .char(let l) = kind { prefix += l } else { prefix += kind == .space ? " " : kind == .backspace ? "<" : "^" }
                 kv.lastTapPoint = at
                 vc.keyboard(sender, didTap: kind)
+                var drained = false   // the time between keys: the strip and the next letter's chances (a touch only looks them up)
+                DispatchQueue.main.async { drained = true }
+                while !drained { CFRunLoopRunInMode(.defaultMode, 0, true) }
             }
             let t0 = CACurrentMediaTime()
             vc.keyboard(sender, didTap: .space)
