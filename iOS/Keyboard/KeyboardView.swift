@@ -73,7 +73,7 @@ final class KeyboardView: UIView {
     var wordContext: (() -> (prefix: String, vietnamese: Bool))?
     /// English mode, a word under way: the chances of the next letter (a…z, then the word ending here), from the
     /// sentence (SuggestLM.nextLetters). Touches then go by TapModel; nil: the engine's fat-finger pick.
-    var letterOdds: (() -> [Double]?)?
+    var letterOdds: (() -> (odds: [Double], vietnamese: Bool)?)?
     /// Whether the word so far is finished and no word goes on with this letter (a touch just above the space bar
     /// then types space).
     var wordEnds: ((String) -> Bool)?
@@ -480,8 +480,9 @@ final class KeyboardView: UIView {
     /// letter most likely next (fat-finger). nil: no key, or the globe. Touches and the tap-area tests both use it.
     func key(at p: CGPoint) -> (cap: KeyCap, kind: KeyKind)? {
         guard var c = cap(at: p), var k = kind(of: c), k != .globe else { return nil }
-        if layer_ == .letters, Self.tapModelOn, TapModel.competes(k), let odds = letterOdds?(), odds.count == 27,
-           let picked = TapModel.pick(p, keys: keys.filter { !$0.view.isHidden }.map { ($0.def.kind, $0.view.frame, $0.view) }, odds: odds) {
+        if layer_ == .letters, Self.tapModelOn, TapModel.competes(k), let o = letterOdds?(), o.odds.count == 27,
+           let picked = TapModel.pick(p, keys: keys.filter { !$0.view.isHidden }.map { ($0.def.kind, $0.view.frame, $0.view) }, odds: o.odds,
+                                      o.vietnamese ? TapModel.vietnamese : TapModel.english) {
             return picked
         }
         // between the bottom letters and the space bar, after a finished word that no word goes on with this letter:

@@ -8,11 +8,17 @@ import UIKit
 /// situations it wasn't fitted on (Apple agrees with itself 93.8% tapping the same points twice). Word starts keep
 /// the engine's pick: the model did worse there (93.9% -> 92.6%).
 enum TapModel {
-    static var sigmaX = 0.3, sigmaY = 0.25   // spread, in letter-key widths / key heights
-    static var weight = 0.6                  // how much the next-letter chances count
-    static var floor = 0.001, spaceFloor = 0.001, delete = 0.03, shift = 0.001
-    static var sure = 0.7                    // inside this share of a key (from its centre), it wins outright
-    static var offsetY = -0.05               // touches count a little higher than they land, in key heights
+    struct Params {
+        var sigmaX = 0.3, sigmaY = 0.25   // spread, in letter-key widths / key heights
+        var weight = 0.6                  // how much the next-letter chances count
+        var floor = 0.001, spaceFloor = 0.001, delete = 0.03, shift = 0.001
+        var sure = 0.7                    // inside this share of a key (from its centre), it wins outright
+        var offsetY = -0.05               // touches count a little higher than they land, in key heights
+    }
+    static var english = Params()
+    /// Vietnamese mode (D66): the next Telex key's chances from the Vietnamese model (SuggestLM.nextKeys); tuned on
+    /// our own Vietnamese typing test, not Apple (Tony: Apple's Vietnamese keyboard is no yardstick).
+    static var vietnamese = Params(weight: 0.8, sure: 0.5)
 
     /// The keys the model chooses between; a touch on any other key (123, return, emoji) types that key.
     static func competes(_ k: KeyKind) -> Bool {
@@ -24,7 +30,9 @@ enum TapModel {
     }
 
     /// odds: 27 values (a…z, then the word ending). nil when no key qualifies.
-    static func pick(_ p: CGPoint, keys: [(KeyKind, CGRect, KeyCap)], odds: [Double]) -> (cap: KeyCap, kind: KeyKind)? {
+    static func pick(_ p: CGPoint, keys: [(KeyKind, CGRect, KeyCap)], odds: [Double], _ m: Params) -> (cap: KeyCap, kind: KeyKind)? {
+        let (sigmaX, sigmaY, weight, floor, spaceFloor, delete, shift, sure, offsetY) =
+            (m.sigmaX, m.sigmaY, m.weight, m.floor, m.spaceFloor, m.delete, m.shift, m.sure, m.offsetY)
         let cands = keys.filter { competes($0.0) }
         guard let letterW = cands.first(where: { if case .char = $0.0 { return true }; return false })?.1.width, letterW > 0 else { return nil }
         // inside the middle of a key: that key

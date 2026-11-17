@@ -5,6 +5,25 @@ Each entry records what was asked, what was decided, and its status. Newest firs
 
 Status values: **Shipped** (in a build Tony has), **Agreed** (decided, not built yet), **Rejected**.
 
+## 66. Vietnamese key areas follow the sentence mid-word (iOS)
+
+**Status:** Agreed (built), 2026-11-17 (Tony: "can we make the same improvement for VI mode as well regarding tap areas? but don't use apple as benchmark because apple keyboard for VN sucks").
+
+**Measured.** Our own typing test, not Apple: Vietnamese words from the eval sets, with the text before them, typed in the Telex keys people used (`vikey-data lm_vi/make_type_cases_vi.py`; social, tech and news sets). Each key is a tap scattered like a real touch (`TypingAccuracyTests`, TYPE_MODE=vi). The val split (4,800 words) was used to tune; the test split (4,800 other words) is the result.
+
+**Decision.** In Vietnamese mode, while a word is under way, a touch goes by `TapModel` (D65) with the next Telex key's chances from the Vietnamese model, after the words before (`SuggestLM.nextKeys`):
+- The commonest 25,000 Vietnamese words are spelled in Telex, marks in place (aa aw ee oo ow uw dd) and the tone apart: "người" = nguwowi + f, also nguowi.
+- Tone keys typed after the first vowel count as the tone, wherever they come.
+- A pending tone is the next key once the letters are done (3% of the time before they're done). Otherwise the word ends.
+- Tuned on val: weight 0.8, the sure zone 50% of a key, otherwise English's numbers.
+- When no indexed word goes on from the keys typed (English words, teencode), the engine's pick stays.
+
+The odds are read between keys; a touch only looks them up. The followers of the words before go into one slot per word id (240 KB), cleared when the context changes.
+
+**Result** (test split, 4,800 words): right after autocorrect 94.15% → 96.23%, taps alone right 90.6% → 94.9%, mistyped words 452 → 243, correct words broken 22 → 21. Live in the simulator, the real keyboard: 150 Vietnamese words 149 right, memory peak 50 MB (build 59: 51 MB). Debug touch time: mean 65 µs.
+
+**Locked by:** `KeyboardPerformanceTests.testVietnameseMidWordTouchFollowsTheSentence`: halfway between u and i after "th", "mùa" gives u and "kỳ" gives i; the engine alone gave u for both. `SuggestLMTests.testTelexSpellings`, `testNextKeysFollowTheSentence`. `KeyboardPerformanceTests.testTouchTimeVietnamese`: the odds are never read at a touch; mean under 150 µs.
+
 ## 65. English key areas follow the sentence mid-word, like Apple's (iOS)
 
 **Status:** Agreed (built, TestFlight 1.0.4 (62, 63)), 2026-11-17 (Tony: "I want the key tap areas to be as close to apple as possible, in english mode").

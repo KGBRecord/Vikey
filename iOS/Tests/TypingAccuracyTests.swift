@@ -5,8 +5,8 @@ import UIKit
 /// each letter is a tap at its key's centre plus finger scatter (Gaussian, seeded per case), the key it types as a
 /// touch there would (KeyboardView.key(at:): the engine's fat-finger pick, or TapModel in English mid-word; a touch
 /// can land on space or delete too), the tap recorded for auto-correct, then space. Prints `TYPED\t{"id", "got"}`
-/// per case. Runs only with TYPE_CASES set (a file of [id, text before, word]); TYPE_MODE=vi types in Vietnamese
-/// mode; TYPE_SX / TYPE_SY: scatter in points (9.9, 7.3: σ 0.25 key widths and 0.17 key heights, fitted to the
+/// per case. Runs only with TYPE_CASES set (a file of [id, text before, word] or [id, text before, word, its keys]:
+/// Vietnamese words come with their Telex keys); TYPE_MODE=vi types in Vietnamese mode; TYPE_SX / TYPE_SY: scatter in points (9.9, 7.3: σ 0.25 key widths and 0.17 key heights, fitted to the
 /// Google TSI and How-We-Type tap data); TYPE_TAPMODEL=0 turns TapModel off.
 final class TypingAccuracyTests: XCTestCase {
     override func setUp() { super.setUp(); SuggestLM.warmUpNow() }   // as once the keyboard is up
@@ -34,6 +34,14 @@ final class TypingAccuracyTests: XCTestCase {
         if env["TYPE_STRICT"] == "0" { KeyboardViewController.slipStrict = false }
         if let m = Double(env["TYPE_MARGIN_WORD"] ?? "") { KeyboardViewController.slipMarginWord = m }
         KeyboardView.tapModelOn = env["TYPE_TAPMODEL"] != "0"
+        KeyboardViewController.viTapModelOn = env["TYPE_VITAPMODEL"] != "0"
+        // tuning: TYPE_TM_VI="weight,sigmaX,sigmaY,sure,offsetY,toneNow"
+        let savedVI = TapModel.vietnamese, savedTone = KeyboardViewController.viToneNow
+        defer { TapModel.vietnamese = savedVI; KeyboardViewController.viToneNow = savedTone; KeyboardViewController.viTapModelOn = true }
+        if let t = env["TYPE_TM_VI"]?.split(separator: ",").compactMap({ Double($0) }), t.count == 6 {
+            TapModel.vietnamese.weight = t[0]; TapModel.vietnamese.sigmaX = t[1]; TapModel.vietnamese.sigmaY = t[2]
+            TapModel.vietnamese.sure = t[3]; TapModel.vietnamese.offsetY = t[4]; KeyboardViewController.viToneNow = t[5]
+        }
         defer { KeyboardView.tapModelOn = true }
         let sender = KeyboardView()
         var spaceMs: [Double] = []
@@ -51,7 +59,7 @@ final class TypingAccuracyTests: XCTestCase {
             let rects = kv.keyRects
             var rng = Gauss(state: UInt64(n) &* 7919 &+ 17)
             var prefix = ""
-            for ch in c[2].lowercased() {
+            for ch in (c.count > 3 ? c[3] : c[2]).lowercased() {
                 guard let k = rects.first(where: { $0.letter == CChar(ch.asciiValue ?? 0) }) else { continue }
                 let x = Float(Double(k.x + k.w / 2) + rng.normal() * sx), y = Float(Double(k.y + k.h / 2) + rng.normal() * sy)
                 let at = CGPoint(x: CGFloat(x), y: CGFloat(y))

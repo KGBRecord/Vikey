@@ -3,20 +3,26 @@
 
     score_typed.py CASES.json LOG [--show N]
 right = the word that ended up in the text is the one meant (case-blind, an apostrophe the keyboard added is fine);
-taps alone = the keys the taps picked spell it (before auto-correct). Of the words whose taps were wrong, how many
+taps alone = the keys the taps picked spell it (before auto-correct; Vietnamese cases: its Telex keys). Of the words whose taps were wrong, how many
 were fixed; of those typed right, how many were broken.
 """
-import json, sys, collections
+import collections
+import json
+import sys
+import unicodedata
 cases = {c[0]: c for c in json.load(open(sys.argv[1]))}
 show = int(sys.argv[sys.argv.index('--show') + 1]) if '--show' in sys.argv else 0
 st = collections.Counter(); miss = []
 for l in open(sys.argv[2], encoding='utf-8'):
     if not l.startswith('TYPED\t'): continue
     j = json.loads(l.split('\t', 1)[1]); c = cases[j['id']]
-    want = c[2].lower(); got = j['got'].strip().lower().replace('’', "'"); keys = j['keys']
+    want = unicodedata.normalize('NFC', c[2].lower())
+    want_keys = c[3].lower() if len(c) > 3 else want   # Vietnamese cases: the word's Telex keys
+    got = unicodedata.normalize('NFC', j['got'].strip().lower().replace('’', "'"))
+    keys = j['keys']
     ok = got == want or got.replace("'", '') == want
     st['n'] += 1; st['right'] += ok
-    if keys != want:
+    if keys != want_keys:
         st['typo'] += 1; st['fixed'] += ok
         if not ok: miss.append((want, keys, got))
     else:

@@ -183,4 +183,44 @@ final class SuggestLMTests: XCTestCase {
         for _ in 0..<20 { _ = lm.nextLetters("", before: "in the ") }
         print("nextLetters at a word start after \"in the \": \((CACurrentMediaTime() - t0) / 20 * 1e6) us")
     }
+
+    func testTelexSpellings() {
+        func spell(_ w: String) -> [String] { SuggestLM.telexSpellings(w).map { String(decoding: $0.0, as: UTF8.self) + ($0.1 == 0 ? "" : "+" + String(UnicodeScalar($0.1))) } }
+        XCTAssertEqual(spell("người"), ["nguwowi+f", "nguowi+f"])
+        XCTAssertEqual(spell("đường"), ["dduwowng+f", "dduowng+f"])
+        XCTAssertEqual(spell("ăn"), ["awn"])
+        XCTAssertEqual(spell("ấy"), ["aay+s"])
+        XCTAssertEqual(spell("Việt"), ["vieet+j"])
+        XCTAssertEqual(spell("ok"), ["ok"])
+        XCTAssertEqual(spell("e-mail"), [])
+    }
+
+    // the next Telex key follows the sentence (D66)
+    func testNextKeysFollowTheSentence() throws {
+        let vi = SuggestLM.vietnamese
+        let keys = Array("abcdefghijklmnopqrstuvwxyz") + ["·"]
+        func top(_ typed: String, _ before: String) throws -> Character {
+            let d = try XCTUnwrap(vi.nextKeys(typed, before: before))
+            XCTAssertEqual(d.reduce(0, +), 1, accuracy: 1e-6)
+            return keys[d.indices.max { d[$0] < d[$1] }!]
+        }
+        XCTAssertEqual(try top("na", "hôm "), "y")      // hôm nay
+        XCTAssertEqual(try top("o", "cảm "), "w")       // cảm ơn
+        XCTAssertEqual(try top("dduwow", "con "), "n")  // con đường
+        XCTAssertEqual(try top("nhieeu", "bao "), "·")  // bao nhiêu: it ends here
+        let d = try XCTUnwrap(vi.nextKeys("nhieeu", before: "rất "))   // rất nhiều: the tone comes next
+        XCTAssertGreaterThan(d[5], d[26])
+        XCTAssertNil(vi.nextKeys("qzx", before: ""))
+        var worst = 0.0, total = 0.0, n = 0
+        var before = ""
+        for word in ["hoom", "nay", "tooi", "ddi", "hocj", "vaf", "nguwowif", "ta", "noi", "ddeen", "nhieeuf", "chuyeenj"] {
+            for i in 1..<word.count {
+                let t0 = CACurrentMediaTime()
+                _ = vi.nextKeys(String(word.prefix(i)), before: before)
+                let t = (CACurrentMediaTime() - t0) * 1e6; worst = max(worst, t); total += t; n += 1
+            }
+            before += word + " "
+        }
+        print(String(format: "nextKeys: mean %.0f us, worst %.0f us", total / Double(n), worst))
+    }
 }
