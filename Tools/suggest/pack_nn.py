@@ -2,7 +2,9 @@
 """Packs the next-word network (vikey-data lm_en/train_nn.py: LSTM, tied embeddings) into iOS/Keyboard/SuggestNN.bin
 for SuggestNN.swift. Run after pack_lm.py, with the venv that has torch:
 
-    ~/.venvs/vikeydata/bin/python Tools/suggest/pack_nn.py [--src mix_r4] [--model lstm.pt]
+    ~/.venvs/vikeydata/bin/python Tools/suggest/pack_nn.py [--src mix_r4] [--model lstm.pt]       English: SuggestNN.bin
+    ~/.venvs/vikeydata/bin/python Tools/suggest/pack_nn.py --data ~/Work/vikey-data/lm_vi --model lstm_vi.pt \
+        --lm SuggestVI --out SuggestVINN                                                          Vietnamese
 
 Layout, little-endian, 4-byte aligned:
   "VKNN0001", then u32: V (network words, 4 markers first), E, H, nWords (SuggestEN.bin's)
@@ -19,9 +21,10 @@ import numpy as np, torch
 HERE = os.path.dirname(os.path.abspath(__file__))
 src = sys.argv[sys.argv.index('--src') + 1] if '--src' in sys.argv else 'mix_r4'
 model = sys.argv[sys.argv.index('--model') + 1] if '--model' in sys.argv else 'lstm.pt'
-D = os.path.expanduser(f'~/Work/vikey-data/lm_en/{src}')
-OUT = os.path.join(HERE, '..', '..', 'iOS', 'Keyboard', 'SuggestNN.bin')
-LM = os.path.join(HERE, '..', '..', 'iOS', 'Keyboard', 'SuggestEN.bin')
+def arg(k, d): return sys.argv[sys.argv.index(k) + 1] if k in sys.argv else d
+D = os.path.expanduser(arg('--data', f'~/Work/vikey-data/lm_en/{src}'))
+OUT = os.path.join(HERE, '..', '..', 'iOS', 'Keyboard', arg('--out', 'SuggestNN') + '.bin')
+LM = os.path.join(HERE, '..', '..', 'iOS', 'Keyboard', arg('--lm', 'SuggestEN') + '.bin')
 
 sd = torch.load(os.path.join(D, model), map_location='cpu')
 emb = sd['emb.weight'].numpy(); V, E = emb.shape

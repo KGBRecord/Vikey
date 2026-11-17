@@ -29,7 +29,7 @@ final class AppleRefUITests: XCTestCase {
         }
         func same(_ a: [[Any]], _ b: [[Any]]) -> Bool { a.map { "\($0)" } == b.map { "\($0)" } }
         while true {
-            app.buttons["next"].tap()
+            app.buttons["appleref.next"].tap()
             let parts = label.label.split(separator: "\t", omittingEmptySubsequences: false).map(String.init)
             if parts.first == "done" || parts.count < 2 { break }
             let before = cells()
@@ -43,6 +43,59 @@ final class AppleRefUITests: XCTestCase {
             }
             let line = try JSONSerialization.data(withJSONObject: ["id": parts[0], "cells": now])
             print("SUGGEST\t" + String(decoding: line, as: UTF8.self))
+        }
+    }
+
+    /// Which key a tap lands on: TAPS = a file of [id, text before, x, y] (points, the app's coordinates). For each,
+    /// the app puts the text before the cursor, the test taps (x, y) once and prints what the field gained as
+    /// `TAP\t{"id", "got"}` ("" when nothing, "⌫" when the text got shorter).
+    func testTapMap() throws {
+        guard let path = ProcessInfo.processInfo.environment["TAPS"] else { throw XCTSkip("TAPS not set") }
+        let taps = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: URL(fileURLWithPath: path))) as? [[Any]])
+        let app = XCUIApplication()
+        app.launchEnvironment["CASES"] = path   // the same rows: [id, text before, ...]
+        app.launch()
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 10))
+        let intro = app.buttons["Continue"]
+        if intro.waitForExistence(timeout: 2) { intro.tap() }
+        let origin = app.coordinate(withNormalizedOffset: .zero)
+        let field = app.textViews["text"]
+        for t in taps {
+            app.buttons["appleref.next"].tap()
+            let before = t[1] as! String   // what the app put there
+            origin.withOffset(CGVector(dx: t[2] as! Double, dy: t[3] as! Double)).tap()
+            let after = (field.value as? String) ?? ""
+            let got = after.count < before.count ? "⌫" : String(after.dropFirst(before.count))
+            let line = try JSONSerialization.data(withJSONObject: ["id": t[0], "got": got])
+            print("TAP\t" + String(decoding: line, as: UTF8.self))
+        }
+    }
+
+    /// Whole words typed by taps: WORDS = a file of [id, text before, [[x, y], ...]] (the word's taps, then a tap
+    /// on space). Prints what the field gained, the keyboard's corrections included: `WORD\t{"id", "got"}`.
+    func testWordTaps() throws {
+        guard let path = ProcessInfo.processInfo.environment["WORDS"] else { throw XCTSkip("WORDS not set") }
+        let words = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: URL(fileURLWithPath: path))) as? [[Any]])
+        let app = XCUIApplication()
+        app.launchEnvironment["CASES"] = path
+        app.launch()
+        _ = app.keyboards.firstMatch.waitForExistence(timeout: 10)   // a third-party keyboard isn't listed: no assert
+        let intro = app.buttons["Continue"]
+        if intro.waitForExistence(timeout: 2) { intro.tap() }
+        let origin = app.coordinate(withNormalizedOffset: .zero)
+        let field = app.textViews["text"]
+        for w in words {
+            app.buttons["appleref.next"].tap()
+            // with a third-party keyboard the app can take a moment to show the case's text: wait for it, or the
+            // taps land on the previous case's
+            let end = Date().addingTimeInterval(3)
+            while ((field.value as? String) ?? "") != (w[1] as! String), Date() < end { usleep(100_000) }
+            for p in w[2] as! [[Double]] { origin.withOffset(CGVector(dx: p[0], dy: p[1])).tap() }
+            let after = (field.value as? String) ?? ""
+            let before = w[1] as! String
+            let got = after.hasPrefix(before) ? String(after.dropFirst(before.count)) : "?" + after
+            let line = try JSONSerialization.data(withJSONObject: ["id": w[0], "got": got])
+            print("WORD\t" + String(decoding: line, as: UTF8.self))
         }
     }
 }
