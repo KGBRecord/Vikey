@@ -123,6 +123,98 @@ final class KeyboardPerformanceTests: XCTestCase {
         repeat { RunLoop.main.run(until: Date().addingTimeInterval(0.02)) } while !done() && Date() < end
     }
 
+    // MARK: opening the keyboard
+    // iOS shows its own keyboard instead when Vikey is slow to come up (Tony, builds 57-59: the suggestion models were
+    // read while it opened, slow when they weren't in memory). Opening must read none of the bundle's model files,
+    // and stay within a time budget.
+
+    /// Every model file in the keyboard's bundle (*.bin), present and future.
+    private func modelFiles() -> [URL] {
+        var seen = Set<String>(), out: [URL] = []
+        for b in [Bundle.main, Bundle(for: SuggestLM.self)] {
+            for u in b.urls(forResourcesWithExtension: "bin", subdirectory: nil) ?? [] where seen.insert(u.lastPathComponent).inserted { out.append(u) }
+        }
+        return out
+    }
+
+    /// The share of a file's pages in memory (mincore); `evict` drops them first (msync MS_INVALIDATE).
+    private func resident(_ url: URL, evict: Bool = false) -> Double {
+        let fd = open(url.path, O_RDONLY)
+        guard fd >= 0 else { return -1 }
+        defer { close(fd) }
+        var st = stat()
+        guard fstat(fd, &st) == 0, st.st_size > 0, let m = mmap(nil, Int(st.st_size), PROT_READ, MAP_SHARED, fd, 0), m != MAP_FAILED else { return -1 }
+        defer { munmap(m, Int(st.st_size)) }
+        if evict { msync(m, Int(st.st_size), MS_INVALIDATE) }
+        let page = Int(getpagesize()), pages = (Int(st.st_size) + page - 1) / page
+        var vec = [CChar](repeating: 0, count: pages)
+        guard mincore(m, Int(st.st_size), &vec) == 0 else { return -1 }
+        return Double(vec.filter { $0 & 1 != 0 }.count) / Double(pages)
+    }
+
+    /// Opens the keyboard as iOS does, up to just before it shows: load, appear, the field's text, what that queues
+    /// on the main thread (in order), and the strip for the text before the cursor.
+    private func openKeyboard(text: String) -> KeyboardViewController {
+        let vc = KeyboardViewController()
+        let p = CountingProxy()
+        p.text = text
+        vc.proxy = p
+        vc.loadViewIfNeeded()
+        vc.view.frame = CGRect(x: 0, y: 0, width: 402, height: 300)
+        vc.view.layoutIfNeeded()
+        vc.viewWillAppear(false)
+        vc.textDidChange(nil)
+        var drained = false
+        DispatchQueue.main.async { drained = true }   // after everything queued before it
+        while !drained { CFRunLoopRunInMode(.defaultMode, 0, true) }
+        vc.updateSuggestions()   // next words for the text before the cursor
+        return vc
+    }
+
+    func testOpeningReadsNoModelFiles() throws {
+        let files = modelFiles()
+        XCTAssertGreaterThanOrEqual(files.count, 4, "the suggestion models: \(files.map(\.lastPathComponent))")
+        SuggestLM.coolDown()
+        let savedLanguage = UserDefaults.standard.object(forKey: "Language")
+        defer { SuggestLM.warmUpNow(); UserDefaults.standard.set(savedLanguage, forKey: "Language") }
+        for lang in [0, 1] {
+            for f in files { _ = resident(f, evict: true) }
+            let dropped = files.map { resident($0) }
+            guard dropped.allSatisfy({ $0 >= 0 && $0 < 0.05 }) else { throw XCTSkip("can't drop the files from memory here: \(dropped)") }
+            UserDefaults.standard.set(lang, forKey: "Language")   // the language it opens in (viewDidLoad reads it)
+            let vc = openKeyboard(text: lang == 1 ? "Hôm nay tôi đi " : "I said that we ")
+            for (f, r) in zip(files, files.map { resident($0) }) {
+                XCTAssertLessThan(r, 0.05, "\(f.lastPathComponent): \(Int(r * 100))% read while the keyboard opened (language \(lang))")
+            }
+            XCTAssertFalse(SuggestLM.readyEN || SuggestLM.readyVI)
+            // once it shows, they're paged in off the main thread and the strip uses them
+            vc.viewDidAppear(false)
+            waitFor({ SuggestLM.readyEN && SuggestLM.readyVI }, timeout: 10)
+            XCTAssertTrue(SuggestLM.readyEN && SuggestLM.readyVI, "the models never became ready")
+            XCTAssertTrue(files.allSatisfy { resident($0) > 0.9 }, "\(files.map { resident($0) })")
+            vc.viewWillDisappear(false)
+        }
+    }
+
+    func testOpeningTime() {
+        for f in modelFiles() { _ = resident(f, evict: true) }
+        SuggestLM.coolDown()
+        defer { SuggestLM.warmUpNow() }
+        _ = openKeyboard(text: "")   // the first opening sets up shared state (layout tables, the engine)
+        let ms = bestOf(5) {
+            for f in modelFiles() { _ = resident(f, evict: true) }
+            let t0 = CACurrentMediaTime()
+            let vc = openKeyboard(text: "I said that we ")
+            let t = (CACurrentMediaTime() - t0) * 1000
+            vc.viewWillDisappear(false)
+            return t
+        }
+        print("opening the keyboard: \(String(format: "%.1f", ms)) ms")
+        // debug build: ~6-8 ms now, ~36 ms with build 59's model reads; a busy Mac adds up to ~10 ms. The exact guard
+        // is testOpeningReadsNoModelFiles; this one catches any other slow work added to opening.
+        XCTAssertLessThan(ms, 30, "opening the keyboard took \(ms) ms (debug build)")
+    }
+
     func testSuggestionStrip() {
         let (vc, _) = makeKeyboard()
         vc.setLanguageForTests(0)

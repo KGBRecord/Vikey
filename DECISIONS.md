@@ -5,6 +5,21 @@ Each entry records what was asked, what was decided, and its status. Newest firs
 
 Status values: **Shipped** (in a build Tony has), **Agreed** (decided, not built yet), **Rejected**.
 
+## 64. The keyboard opens without reading the suggestion models (iOS)
+
+**Status:** Shipped in TestFlight 1.0.4 (60), 2026-11-17 (Tony: "add some test to make sure this never happen again").
+
+**Problem.** Builds 57-59: iOS sometimes showed its own keyboard instead of Vikey, right as it opened. Tony's phone had no crash report and no JetsamEvent: Vikey was too slow to come up, and iOS gave up on it. Since 57, opening read the suggestion models (~70 MB) on the main thread before the keyboard showed. That's slow when the files aren't in memory (after other apps pushed them out), so it happened only sometimes. Simulator, files not cached: opening took ~47 ms, 34-36 ms of it reading models.
+
+**Decision.**
+- Opening the keyboard reads no model file (any `*.bin` in the keyboard's bundle, now or later).
+- Once the keyboard shows, the models are read in the background, the keyboard's language first. The strip uses a model only once it's ready. Until then (~0.1 s) it shows the engine's words, as in 1.0.3.
+- The keyboard going away marks them not ready, so the next opening reads them again in the background (3 ms when still in memory).
+
+**Result.** Simulator, files not cached: opening 47 ms → 10-13 ms (1.0.3: ~12 ms). Debug test build: 4-8 ms.
+
+**Locked by:** `KeyboardPerformanceTests.testOpeningReadsNoModelFiles`. It drops every model file from memory, opens the keyboard in each language (load, appear, the field's text, the queued work, the first strip) and checks that no page of any model file was read and no model is in use; after it shows, the models must load. `testOpeningTime`: opening under 30 ms in the debug build. With build 59's opening put back, both fail: the network files 100% read, opening 36 ms.
+
 ## 63. Autocorrect reads slips onto neighbouring keys with the sentence (iOS, English)
 
 **Status:** Shipped in TestFlight 1.0.4 (58, 59), 2026-11-17 (Tony: "merge the PR").
