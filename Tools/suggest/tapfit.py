@@ -14,7 +14,11 @@ The model, per touch (x, y) and key k:
            delete, shift: fixed;  other keys: never by a prior (they win only inside their own frame)
 and inside the middle `sure` share of a key, that key wins outright.
 """
-import argparse, json, math, sys
+import argparse
+import json
+import math
+import sys
+
 import numpy as np
 
 LETTERS = "abcdefghijklmnopqrstuvwxyz"
@@ -146,7 +150,7 @@ def main():
 
 # ---- a learned model: per-key biases + the language model, fitted by maximum likelihood (softmax over keys) ----
 
-def learn(F, gold, train, floor=0.01, sfloor=0.03, epochs=400):
+def learn(F, gold, train, floor=0.01, sfloor=0.03, epochs=400, use_lm=True):
     import torch
     keys = KEYS_USED
     idx = {k: i for i, k in enumerate(keys)}
@@ -160,14 +164,15 @@ def learn(F, gold, train, floor=0.01, sfloor=0.03, epochs=400):
     lm_mask = torch.tensor([1.0] * 27 + [0.0, 0.0], dtype=torch.float64)
     a = torch.tensor(4.0, dtype=torch.float64, requires_grad=True)     # 1 / sigma_x^2
     b = torch.tensor(8.0, dtype=torch.float64, requires_grad=True)     # 1 / sigma_y^2
-    w = torch.tensor(0.3, dtype=torch.float64, requires_grad=True)     # the language model's weight
+    w = torch.tensor(0.3 if use_lm else 0.0, dtype=torch.float64, requires_grad=use_lm)   # the language model's weight
     bias = torch.zeros(len(keys), dtype=torch.float64, requires_grad=True)
-    opt = torch.optim.Adam([a, b, w, bias], lr=0.05)
+    opt = torch.optim.Adam([a, b, bias] + ([w] if use_lm else []), lr=0.05)
     for _ in range(epochs):
         opt.zero_grad()
         s = -0.5 * (a * DX2 + b * DY2) + w * LP * lm_mask + bias
         loss = torch.nn.functional.cross_entropy(s, y) + 1e-3 * (bias ** 2).sum()
-        loss.backward(); opt.step()
+        loss.backward()
+        opt.step()
     return dict(a=a.item(), b=b.item(), w=w.item(), bias=bias.detach().numpy().tolist(), floor=floor, sfloor=sfloor)
 
 def predict_learned(F, m):
@@ -201,9 +206,7 @@ def main_learned():
             if not use_lm: break
 
 def learn_no_lm(F, gold, train):
-    G = dict(F); G["P"] = np.full_like(F["P"], 1 / 27)
-    m = learn(G, gold, train); m["w"] = 0.0
-    return m
+    return learn(F, gold, train, use_lm=False)   # w stays 0 while fitting: the biases carry the rest
 
 
 if __name__ == "__main__":

@@ -110,6 +110,36 @@ final class KeyboardPerformanceTests: XCTestCase {
                          return keyAt(after: "Thank ", typing: "yo", mode: 1, between: "y", "u", share: 0.45) }())
     }
 
+    /// A touch between the bottom letters and the space bar after a finished word types space (Tony: "thank you" came
+    /// out "thanknyou"), in both modes; while the word can go on with that letter, the letter.
+    func testSpaceAfterAFinishedWord() {
+        func touchBelow(_ letter: Character, after typed: String, mode: Int, tapModel: Bool = true) -> String {
+            KeyboardView.tapModelOn = tapModel
+            defer { KeyboardView.tapModelOn = true }
+            let p = CursorProxy()
+            let vc = KeyboardViewController()
+            vc.proxy = p
+            vc.loadViewIfNeeded()
+            vc.view.frame = CGRect(x: 0, y: 0, width: 402, height: 300)
+            vc.view.layoutIfNeeded()
+            vc.viewWillAppear(false)
+            vc.setLanguageForTests(mode)
+            for c in typed { vc.keyboard(sender, didTap: .char(String(c))) }
+            let k = vc.keyboardViewForTests.keyRects.first { $0.letter == CChar(letter.asciiValue!) }!
+            switch vc.keyboardViewForTests.key(at: CGPoint(x: CGFloat(k.x + k.w / 2), y: CGFloat(k.y + k.h) + 3))?.kind {   // 3 pt under the key
+            case .space?: return " "
+            case .char(let l)?: return l
+            default: return "?"
+            }
+        }
+        XCTAssertEqual(touchBelow("n", after: "thank", mode: 0), " ")
+        XCTAssertEqual(touchBelow("n", after: "thank", mode: 0, tapModel: false), " ")
+        XCTAssertEqual(touchBelow("n", after: "thank", mode: 1), " ")
+        XCTAssertEqual(touchBelow("n", after: "tha", mode: 0), "n")    // "than": the word goes on with n
+        XCTAssertEqual(touchBelow("n", after: "tha", mode: 1), "n")
+        XCTAssertEqual(touchBelow("x", after: "ma", mode: 1), "x")     // Telex: the tone
+    }
+
     func testTypesCorrectly() {
         let (vc, p) = makeKeyboard()
         type("tooi ddi hocj sorry em ", into: vc)

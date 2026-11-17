@@ -55,7 +55,7 @@ final class TypingAccuracyTests: XCTestCase {
                 guard let k = rects.first(where: { $0.letter == CChar(ch.asciiValue ?? 0) }) else { continue }
                 let x = Float(Double(k.x + k.w / 2) + rng.normal() * sx), y = Float(Double(k.y + k.h / 2) + rng.normal() * sy)
                 let at = CGPoint(x: CGFloat(x), y: CGFloat(y))
-                let kind = kv.key(at: at)?.kind ?? .char(String(ch))
+                guard let kind = kv.key(at: at)?.kind else { continue }   // the globe, the strip: the keyboard drops these touches
                 if case .char(let l) = kind { prefix += l } else { prefix += kind == .space ? " " : kind == .backspace ? "<" : "^" }
                 kv.lastTapPoint = at
                 vc.keyboard(sender, didTap: kind)

@@ -6,7 +6,9 @@ on the iOS 26 iPhone layout 402 pt wide, in the AppleRef window's coordinates (r
     tapsample.py OUT.json [--per 200] [--seed 7]
 Rows: [id "cNN-i", text before the cursor, x, y]. Contexts: word starts after a word, and words half typed.
 """
-import argparse, json, random
+import argparse
+import json
+import random
 
 CONTEXTS = [
     "I said ", "Thank ", "I want to ", "Can you ", "See you ", "It was a ", "Let me ", "How are ", "We need to ",

@@ -84,14 +84,15 @@ final class SuggestLM {
         guard !warming else { return }
         warming = true
         let pass = generation
+        let sumsNeeded = Set([shared, vietnamese].filter { !$0.isEmpty && $0.cumulative == nil }.map { ObjectIdentifier($0) })   // read here, on main
         let groups = [(vietnamese: false, names: ["SuggestEN", "SuggestNN"]), (vietnamese: true, names: ["SuggestVI", "SuggestVINN"])]
         let order = vietnameseFirst ? groups.reversed() : groups
         warmQueue.async {
             for (n, g) in order.enumerated() {
                 var sum = 0
                 for name in g.names { sum &+= touchPages(name) }
-                let lm = g.vietnamese ? vietnamese : shared   // (static lets: safe to create here)
-                let sums = lm.isEmpty || lm.cumulative != nil ? nil : lm.runningSums()
+                let lm = g.vietnamese ? vietnamese : shared
+                let sums = sumsNeeded.contains(ObjectIdentifier(lm)) ? lm.runningSums() : nil   // reads only the mapped file
                 DispatchQueue.main.async {
                     pagesSeen &+= sum
                     if let sums, lm.cumulative == nil { lm.cumulative = sums }
@@ -180,6 +181,9 @@ final class SuggestLM {
         let k = Self.bytes(word), i = lowerBound(k)
         return i < wordCount && compare(i, k) == 0 ? i : nil
     }
+
+    /// Whether some word starts with `prefix` (the prefix itself counts).
+    func startsWord(_ prefix: String) -> Bool { !isEmpty && !range(Self.bytes(prefix)).isEmpty }
 
     /// How often the word was seen (0 when it isn't a word here).
     func count(_ word: String) -> Int { id(word).map { u32(uni, $0) } ?? 0 }
