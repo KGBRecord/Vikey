@@ -145,4 +145,23 @@ final class SuggestLMTests: XCTestCase {
         let cells = vc.keyboardViewForTests.suggestions.map(\.text)
         XCTAssertTrue(cells.dropFirst().allSatisfy { $0.hasPrefix("resi") } && cells.count == 3, "\(cells)")   // the model's ways to finish it
     }
+
+    func testWarmUpTellsEveryCallerAndForgetsAPassFromBeforeTheKeyboardWentAway() {
+        SuggestLM.coolDown()
+        defer { SuggestLM.warmUpNow() }
+        // a pass the keyboard went away during marks nothing ready
+        SuggestLM.warmUp(vietnameseFirst: false) {}
+        SuggestLM.coolDown()
+        let until = Date().addingTimeInterval(1)
+        while Date() < until { RunLoop.main.run(until: Date().addingTimeInterval(0.02)) }
+        XCTAssertFalse(SuggestLM.readyEN || SuggestLM.readyVI)
+        // a second keyboard joining a pass under way is told too
+        var first = 0, second = 0
+        SuggestLM.warmUp(vietnameseFirst: true) { first += 1 }
+        SuggestLM.warmUp(vietnameseFirst: false) { second += 1 }
+        let end = Date().addingTimeInterval(10)
+        while !(SuggestLM.readyEN && SuggestLM.readyVI) && Date() < end { RunLoop.main.run(until: Date().addingTimeInterval(0.02)) }
+        XCTAssertTrue(SuggestLM.readyEN && SuggestLM.readyVI)
+        XCTAssertEqual(first, 2); XCTAssertEqual(second, 2)   // once per language
+    }
 }

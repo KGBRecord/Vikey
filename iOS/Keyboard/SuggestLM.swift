@@ -72,12 +72,18 @@ final class SuggestLM {
     private(set) static var readyEN = false, readyVI = false
     private static let warmQueue = DispatchQueue(label: "vikey.suggest.warm", qos: .utility)
     private static var warming = false
+    private static var generation = 0          // a pass started before the keyboard last went away counts for nothing
+    private static var waiting: [() -> Void] = []   // told each time a language becomes ready
 
     /// Pages the files in on a background queue (the keyboard's language first), then marks each language ready on
-    /// the main thread and calls `done`. Cheap when they're still in memory from the last time. Main thread only.
+    /// the main thread and calls `done` (also when it joins a pass already under way). Cheap when they're still in
+    /// memory from the last time. Main thread only.
     static func warmUp(vietnameseFirst: Bool, done: @escaping () -> Void) {
-        guard !warming, !(readyEN && readyVI) else { return }
+        guard !(readyEN && readyVI) else { return }
+        waiting.append(done)
+        guard !warming else { return }
         warming = true
+        let pass = generation
         let groups = [(vietnamese: false, names: ["SuggestEN", "SuggestNN"]), (vietnamese: true, names: ["SuggestVI", "SuggestVINN"])]
         let order = vietnameseFirst ? groups.reversed() : groups
         warmQueue.async {
@@ -85,10 +91,12 @@ final class SuggestLM {
                 var sum = 0
                 for name in g.names { sum &+= touchPages(name) }
                 DispatchQueue.main.async {
-                    if g.vietnamese { readyVI = true } else { readyEN = true }
-                    if n == order.count - 1 { warming = false }
                     pagesSeen &+= sum
-                    done()
+                    guard pass == generation else { return }
+                    if g.vietnamese { readyVI = true } else { readyEN = true }
+                    let callers = waiting
+                    if n == order.count - 1 { warming = false; waiting = [] }
+                    callers.forEach { $0() }
                 }
             }
         }
@@ -106,8 +114,9 @@ final class SuggestLM {
         return sum
     }
 
-    /// The keyboard went away: iOS may drop the pages before it's back, so the next opening pages them in again.
-    static func coolDown() { readyEN = false; readyVI = false }
+    /// The keyboard went away: iOS may drop the pages before it's back, so the next opening pages them in again
+    /// (a pass still under way no longer counts).
+    static func coolDown() { readyEN = false; readyVI = false; generation += 1; warming = false; waiting = [] }
 
     /// Tests: use the files at once.
     static func warmUpNow() { readyEN = true; readyVI = true }

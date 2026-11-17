@@ -7,7 +7,7 @@ Status values: **Shipped** (in a build Tony has), **Agreed** (decided, not built
 
 ## 64. The keyboard opens without reading the suggestion models (iOS)
 
-**Status:** Shipped in TestFlight 1.0.4 (60), 2026-11-17 (Tony: "add some test to make sure this never happen again").
+**Status:** Shipped in TestFlight 1.0.4 (60, 61), 2026-11-17 (Tony: "add some test to make sure this never happen again").
 
 **Problem.** Builds 57-59: iOS sometimes showed its own keyboard instead of Vikey, right as it opened. Tony's phone had no crash report and no JetsamEvent: Vikey was too slow to come up, and iOS gave up on it. Since 57, opening read the suggestion models (~70 MB) on the main thread before the keyboard showed. That's slow when the files aren't in memory (after other apps pushed them out), so it happened only sometimes. Simulator, files not cached: opening took ~47 ms, 34-36 ms of it reading models.
 
