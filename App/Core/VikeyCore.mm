@@ -311,6 +311,9 @@ extern "C" {
             if (own) _otherInputLanguage = !own.boolValue;
             CFRelease(isource);
         }
+        // a correction pending on the keyboard just left must not be undone on one Vikey stays out of (D61 reads Backspace
+        // before the guard below); the word in progress is not carried over either
+        if (_otherInputLanguage && vOtherLanguage) _autoFixUndo.active = false;
     }
 
     /// Reads Vikey's settings into the engine. Called at start and whenever a setting changes.
