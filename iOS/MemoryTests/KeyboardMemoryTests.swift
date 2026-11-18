@@ -20,8 +20,8 @@ final class KeyboardMemoryTests: XCTestCase {
 
     /// The runner alone, before any test of this bundle touches the keyboard: what the keyboard adds is measured from
     /// it, whichever test built the models and caches first.
-    private static var runnerMB: Double?
-    override class func setUp() { super.setUp(); runnerMB = Footprint.read()?.now }
+    private static var runner: (now: Double, peak: Double)?
+    override class func setUp() { super.setUp(); runner = Footprint.read() }
 
     private let sender = KeyboardView()
 
@@ -29,8 +29,10 @@ final class KeyboardMemoryTests: XCTestCase {
     /// every opening (the test runner does the same), so what's in it must not stay.
     func testAClosedKeyboardLeavesNothingBehind() {
         weak var keys: KeyboardView?, emojiView: EmojiKeyboardView?, controller: KeyboardViewController?
+        var root: UIView?   // held here as iOS holds it: only the controller's cleanup may free what's in it
         autoreleasepool {
             let vc = open()
+            root = vc.view
             type("thank you ", language: 0, into: vc)
             emojiView = emoji(vc)
             type("cajm own ", language: 1, into: vc)
@@ -38,9 +40,11 @@ final class KeyboardMemoryTests: XCTestCase {
             keys = vc.keyboardViewForTests; controller = vc
         }
         settle()
-        XCTAssertNil(controller, "the controller stayed")
-        XCTAssertNil(keys, "the keyboard view stayed after its keyboard closed")
-        XCTAssertNil(emojiView, "the emoji keyboard stayed after its keyboard closed")
+        withExtendedLifetime(root) {
+            XCTAssertNil(controller, "the controller stayed")
+            XCTAssertNil(keys, "the keyboard view stayed after its keyboard closed")
+            XCTAssertNil(emojiView, "the emoji keyboard stayed after its keyboard closed")
+        }
     }
 
     /// Opening the keyboard again and again (each app, each field) costs nothing that stays.
@@ -67,11 +71,16 @@ final class KeyboardMemoryTests: XCTestCase {
     /// typed key by key through the touch path (strip, next-letter odds, corrections), the emoji keyboard opens and
     /// searches, and the keyboard closes and opens again. A sampler reads the footprint every 2 ms.
     func testALongSessionStaysUnder40MB() throws {
-        let runner = try XCTUnwrap(Self.runnerMB, "couldn't read the runner's footprint")
+        let (runner, runnerPeak) = try XCTUnwrap(Self.runner, "couldn't read the runner's footprint")
         let startPeak = try XCTUnwrap(read()).peak
-        // A high from before the session at or past the budget could hide a session spike between two samples (the
-        // high-water mark wouldn't rise): this process's keyboard was already past it, which fails too.
-        XCTAssertLessThan(startPeak - runner, Self.budgetMB, String(format: "already %.1f MB past the runner before the session", startPeak - runner))
+        // A high set since the bundle began is the keyboard's (an earlier test's): past the budget, it fails. One from
+        // before it is the runner's own. Either way, a high at or past the budget could hide a session spike between
+        // two samples (the high-water mark wouldn't rise), so a runner's high there leaves the test inconclusive.
+        if startPeak > runnerPeak {
+            XCTAssertLessThan(startPeak - runner, Self.budgetMB, String(format: "the keyboard was already %.1f MB past the runner before the session", startPeak - runner))
+        } else if startPeak - runner >= Self.budgetMB {
+            throw XCTSkip(String(format: "inconclusive: the runner itself peaked %.1f MB above its footprint before the tests", startPeak - runner))
+        }
         let sampler = Sampler()
         sampler.start()
         for _ in 0..<3 {
