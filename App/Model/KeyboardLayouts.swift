@@ -18,7 +18,9 @@ enum KeyboardLayouts {
         let filter = [kTISPropertyInputSourceIsSelectCapable as String: true,
                       kTISPropertyInputSourceCategory as String: kTISCategoryKeyboardInputSource as String] as CFDictionary
         guard let list = TISCreateInputSourceList(filter, true)?.takeRetainedValue() as? [TISInputSource] else { return [] }
-        // layouts, modes of an input method (Hiragana...) and input methods without modes; not the synthetic Roman mode
+        // layouts, modes of an input method (Hiragana, Romaji "Roman"...) and input methods without modes. The type check also
+        // drops the synthetic Roman mode (kTISTypeKeyboardSyntheticRomanMode); an input method's own Roman mode types plain
+        // Latin letters, so the user can still choose it; not the synthetic Roman mode
         let types: Set<String> = [kTISTypeKeyboardLayout as String, kTISTypeKeyboardInputMode as String,
                                   kTISTypeKeyboardInputMethodWithoutModes as String]
         var seen = Set<String>()
