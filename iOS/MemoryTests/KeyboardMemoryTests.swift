@@ -69,6 +69,9 @@ final class KeyboardMemoryTests: XCTestCase {
     func testALongSessionStaysUnder40MB() throws {
         let runner = try XCTUnwrap(Self.runnerMB, "couldn't read the runner's footprint")
         let startPeak = try XCTUnwrap(read()).peak
+        // A high from before the session at or past the budget could hide a session spike between two samples (the
+        // high-water mark wouldn't rise): this process's keyboard was already past it, which fails too.
+        XCTAssertLessThan(startPeak - runner, Self.budgetMB, String(format: "already %.1f MB past the runner before the session", startPeak - runner))
         let sampler = Sampler()
         sampler.start()
         for _ in 0..<3 {
