@@ -302,18 +302,31 @@ extern "C" {
         if (src) CFRelease(src);
         // computed once per input-source change instead of on every keystroke
         _otherInputLanguage = false;
+        NSString* srcID = nil;
         TISInputSourceRef isource = TISCopyCurrentKeyboardInputSource();
         if (isource) {
             _otherInputLanguage = InputSourceIsOtherLanguage(isource);
             // the user's own choice for this keyboard (settings > Bàn phím) beats the guess above
-            NSString* srcID = (__bridge NSString*)TISGetInputSourceProperty(isource, kTISPropertyInputSourceID);
+            srcID = [(__bridge NSString*)TISGetInputSourceProperty(isource, kTISPropertyInputSourceID) copy];
             NSNumber* own = srcID ? [[NSUserDefaults standardUserDefaults] dictionaryForKey:kKeyboardOverrides][srcID] : nil;
             if (own) _otherInputLanguage = !own.boolValue;
             CFRelease(isource);
         }
-        // a correction pending on the keyboard just left must not be undone on one Vikey stays out of (D61 reads Backspace
-        // before the guard below); the word in progress is not carried over either
-        if (_otherInputLanguage && vOtherLanguage) _autoFixUndo.active = false;
+        bool stayOut = vOtherLanguage && _otherInputLanguage;
+        // A keyboard Vikey stays out of: its keys never reach the engine, so a correction pending on the keyboard just left
+        // must not be undone there (D61 reads Backspace before the guard in the callback).
+        if (stayOut) _autoFixUndo.active = false;
+        // Another keyboard, or Vikey turned on or off for it: the word in progress was not followed across the change, so
+        // start over (the engine session and the English word, as an app switch does). A settings reload that leaves the
+        // keyboard and its state as they were keeps the word.
+        static NSString* lastSourceID = nil;
+        static bool lastStayOut = false, haveLast = false;
+        bool changed = haveLast && (stayOut != lastStayOut || (srcID != lastSourceID && ![srcID isEqualToString:lastSourceID]));
+        lastSourceID = srcID; lastStayOut = stayOut; haveLast = true;
+        if (changed) {
+            ResetEnglishWord(true);
+            startNewSession();
+        }
     }
 
     /// Reads Vikey's settings into the engine. Called at start and whenever a setting changes.
