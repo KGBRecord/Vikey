@@ -20,8 +20,8 @@ final class KeyboardMemoryTests: XCTestCase {
 
     /// The runner alone, before any test of this bundle touches the keyboard: what the keyboard adds is measured from
     /// it, whichever test built the models and caches first.
-    private static var runnerMB = 0.0
-    override class func setUp() { super.setUp(); runnerMB = Footprint.read().now }
+    private static var runnerMB: Double?
+    override class func setUp() { super.setUp(); runnerMB = Footprint.read()?.now }
 
     private let sender = KeyboardView()
 
@@ -55,9 +55,10 @@ final class KeyboardMemoryTests: XCTestCase {
             settle()
         }
         for n in 0..<3 { round(n) }   // the models, the emoji index and the caches: built once
-        let start = Footprint.read().now
+        guard let start = read()?.now else { return }
         for n in 3..<33 { round(n) }
-        let grew = Footprint.read().now - start
+        guard let end = read()?.now else { return }
+        let grew = end - start
         print(String(format: "MEMORY 30 more openings: %+.2f MB", grew))
         XCTAssertLessThan(grew, 1.5, String(format: "30 openings kept %.1f MB", grew))
     }
@@ -65,7 +66,9 @@ final class KeyboardMemoryTests: XCTestCase {
     /// A long session: the keyboard opens and its models load (both languages), English and Vietnamese words are
     /// typed key by key through the touch path (strip, next-letter odds, corrections), the emoji keyboard opens and
     /// searches, and the keyboard closes and opens again. A sampler reads the footprint every 2 ms.
-    func testALongSessionStaysUnder40MB() {
+    func testALongSessionStaysUnder40MB() throws {
+        let runner = try XCTUnwrap(Self.runnerMB, "couldn't read the runner's footprint")
+        let startPeak = try XCTUnwrap(read()).peak
         let sampler = Sampler()
         sampler.start()
         for _ in 0..<3 {
@@ -80,9 +83,14 @@ final class KeyboardMemoryTests: XCTestCase {
             settle()
         }
         sampler.stop()
-        let added = max(sampler.peak, Footprint.read().now) - Self.runnerMB
+        XCTAssertFalse(sampler.failed, "a footprint read failed during the session")
+        let end = try XCTUnwrap(read())
+        // The process's own high-water mark: when it rose during the session, it's the session's peak, a spike
+        // between two samples included. Otherwise the session stayed under an earlier high, and the samples are it.
+        let high = end.peak > startPeak ? end.peak : max(sampler.peak, end.now)
+        let added = high - runner
         print(String(format: "MEMORY long session: %.1f MB on top of the runner's %.1f MB; as a keyboard ~%.1f MB (limit %.0f)",
-                     added, Self.runnerMB, Self.freshKeyboardMB + added, Self.limitMB))
+                     added, runner, Self.freshKeyboardMB + added, Self.limitMB))
         XCTAssertLessThan(added, Self.budgetMB, String(format: "the keyboard added %.1f MB: ~%.0f MB as a keyboard", added, Self.freshKeyboardMB + added))
     }
 
@@ -139,6 +147,13 @@ final class KeyboardMemoryTests: XCTestCase {
         return ev
     }
 
+    /// The footprint, or a failed test when iOS doesn't answer (never a zero that would pass).
+    private func read() -> (now: Double, peak: Double)? {
+        let f = Footprint.read()
+        if f == nil { XCTFail("couldn't read the footprint") }
+        return f
+    }
+
     private func drain() {
         var drained = false
         DispatchQueue.main.async { drained = true }
@@ -155,13 +170,17 @@ final class KeyboardMemoryTests: XCTestCase {
     final class Sampler {
         private let queue = DispatchQueue(label: "memory.sampler")
         private var timer: DispatchSourceTimer?
-        private var top = 0.0
+        private var top = 0.0, failures = 0
         var peak: Double { queue.sync { top } }
+        var failed: Bool { queue.sync { failures > 0 } }
 
         func start() {
             let t = DispatchSource.makeTimerSource(queue: queue)
             t.schedule(deadline: .now(), repeating: .milliseconds(2))
-            t.setEventHandler { [weak self] in self?.top = max(self?.top ?? 0, Footprint.read().now) }
+            t.setEventHandler { [weak self] in
+                guard let self else { return }
+                if let f = Footprint.read() { top = max(top, f.now) } else { failures += 1 }
+            }
             t.resume()
             timer = t
         }
