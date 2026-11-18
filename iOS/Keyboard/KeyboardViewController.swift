@@ -72,6 +72,15 @@ final class KeyboardViewController: UIInputViewController, KeyboardViewDelegate 
     private var webFieldsEnglish = true, autoCapitalize = true, doubleSpacePeriod = true, haptics = true
     private var suggestionsOn = true, autoCorrectOn = true
 
+    deinit {
+        // iOS frees this controller but keeps its root view (one per opening, in a keyboard process it reuses for a
+        // long time): with the keys, the strip and the emoji keyboard still in it, each opening kept ~0.5 MB until
+        // iOS killed the keyboard for its memory and showed its own instead (Tony, 1.0.4). Only the empty view stays.
+        let root = viewIfLoaded
+        let empty: () -> Void = { root?.subviews.forEach { $0.removeFromSuperview() } }
+        if Thread.isMainThread { MainActor.assumeIsolated(empty) } else { DispatchQueue.main.async(execute: empty) }
+    }
+
     override func loadView() {
         let v = KeyboardInputView(frame: .zero, inputViewStyle: .keyboard)
         v.allowsSelfSizing = true

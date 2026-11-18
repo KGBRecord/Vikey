@@ -5,6 +5,21 @@ Each entry records what was asked, what was decided, and its status. Newest firs
 
 Status values: **Shipped** (in a build Tony has), **Agreed** (decided, not built yet), **Rejected**.
 
+## 67. Each opening of the keyboard frees its views; the keyboard's memory is tested (iOS)
+
+**Status:** Agreed (built), 2026-11-18 (Tony: "vikey keyboard still crash, I see this just now"; "Pls add more tests to ensure vikey doesn't go pass 40MB mem usage ever").
+
+**Cause.** iOS keeps one keyboard process for many openings and makes a new controller for each one. It frees the old controller but keeps its root view, and the keys, the strip and the emoji keyboard were still in it. So each opening kept ~0.5 MB. The real keyboard in the simulator, no typing: 17 MB after one opening, 24 MB after 15. Past iOS's limit for a keyboard (~48 MB) after about 70 openings, iOS kills it as it opens and shows its own keyboard instead. That leaves no crash report, and no JetsamEvent showed up on Tony's phone either.
+
+**Fix.** When a controller goes, its root view is emptied (`KeyboardViewController.deinit`). The real keyboard in the simulator, 52 openings: 18 MB, flat.
+
+**Measuring.** `footprint -p <pid>` on the keyboard's process. UI tests (XCUITest, Maestro) load iOS's accessibility frameworks into the keyboard, ~25 MB more: the 50 MB of D66 was mostly that. Open the keyboard with `simctl launch` of a host app instead.
+
+**Locked by:** `VikeyMemoryTests` (a bundle of its own, so its process holds nothing from other tests):
+- `testAClosedKeyboardLeavesNothingBehind`: after typing and the emoji keyboard, a closed keyboard's key view and emoji keyboard are freed.
+- `testOpeningAgainAndAgainDoesNotGrow`: 30 more openings keep under 1.5 MB (+0.2 MB now; +12 MB without the fix).
+- `testALongSessionStaysUnder40MB`: three openings with ~120 words each in English and Vietnamese and an emoji search. What the keyboard adds to the test runner must stay under 40 − 17 MB (a fresh keyboard process is ~17 MB): ~8 MB now, ~25 MB as a keyboard.
+
 ## 66. Vietnamese key areas follow the sentence mid-word (iOS)
 
 **Status:** Agreed (built), 2026-11-17 (Tony: "can we make the same improvement for VI mode as well regarding tap areas? but don't use apple as benchmark because apple keyboard for VN sucks").

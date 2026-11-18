@@ -114,10 +114,33 @@ targets:
         SWIFT_OBJC_BRIDGING_HEADER: Keyboard/Keyboard-Bridging-Header.h
         HEADER_SEARCH_PATHS: ["$(SRCROOT)/../Engine", "$(SRCROOT)/../Engine/platforms", "$(SRCROOT)/Shared"]
         GENERATE_INFOPLIST_FILE: YES
+  # The keyboard's memory budget (MemoryTests/KeyboardMemoryTests.swift): a bundle of its own, so its process holds
+  # nothing from the other tests.
+  VikeyMemoryTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: MemoryTests
+      - path: Keyboard
+        excludes: ["Info.plist", "*.entitlements"]
+      - path: Shared
+      - path: ../App/Model/EmojiSearch.swift
+      - path: ../App/Resources/Emoji.json
+      - path: ../Engine
+        excludes:
+          - "*.inc"
+          - "platforms/win32.h"
+          - "platforms/linux.h"
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.devuap.vikey.ios.memorytests
+        SWIFT_OBJC_BRIDGING_HEADER: Keyboard/Keyboard-Bridging-Header.h
+        HEADER_SEARCH_PATHS: ["$(SRCROOT)/../Engine", "$(SRCROOT)/../Engine/platforms", "$(SRCROOT)/Shared"]
+        GENERATE_INFOPLIST_FILE: YES
 schemes:
   Vikey:
     build:
       targets:
         Vikey: all
     test:
-      targets: [VikeyTests]
+      targets: [VikeyTests, VikeyMemoryTests]
