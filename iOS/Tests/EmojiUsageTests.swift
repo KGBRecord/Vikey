@@ -83,6 +83,9 @@ final class EmojiUsageTests: XCTestCase {
         EmojiKeyboardView.usage = d
         defer { EmojiKeyboardView.usage = saved }
         let group = VKSettings.defaults
+        let legacyBefore = group.object(forKey: EmojiUsage.legacyKey)   // old scores here would move over first
+        group.removeObject(forKey: EmojiUsage.legacyKey)
+        addTeardownBlock { group.set(legacyBefore, forKey: EmojiUsage.legacyKey) }
         let groupBefore = group.object(forKey: EmojiUsage.key) as? NSDictionary
 
         let vc = KeyboardViewController()

@@ -38,7 +38,8 @@ def main():
                         "-fobjc-arc", "-framework", "Foundation", os.path.join(HERE, "apple_frequent.m"), "-o", exe], check=True)
         for name, seq in TESTS.items():
             f = os.path.join(tmp, name + ".txt")
-            open(f, "w").write("\n".join(seq) + "\n")
+            with open(f, "w", encoding="utf-8") as fh:
+                fh.write("\n".join(seq) + "\n")
             # Apple's reset keeps the pick number, so start from no saved state at all
             subprocess.run(["xcrun", "simctl", "spawn", sim, "defaults", "delete", "com.apple.EmojiPreferences"], capture_output=True)
             out = subprocess.run(["xcrun", "simctl", "spawn", sim, exe, f, "30", "prune"], capture_output=True, text=True).stdout
