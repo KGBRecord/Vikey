@@ -5,6 +5,26 @@ Each entry records what was asked, what was decided, and its status. Newest firs
 
 Status values: **Shipped** (in a build Tony has), **Agreed** (decided, not built yet), **Rejected**.
 
+## 68. Frequently Used emoji: kept without Full Access, ranked like Apple's (iOS, Mac)
+
+**Status:** Agreed (built), 2026-11-21 (Tony: "My wife is saying that vikey doesn't remember the 💖 emoji she used frequently. Can you check for bugs? Ideally our "frequently" definition should be the same as the default keyboard").
+
+**Cause.** The keyboard saved its picks (and the skin tone) in the app group. Without Full Access, iOS lets a keyboard read the app group but not write to it (Apple: "read-only access to the containing app's shared containers"). The write only lived in the keyboard's memory, so the picks were gone each time iOS restarted the keyboard. The simulator doesn't enforce this, so tests never saw it.
+
+**Fix.** The keyboard keeps Frequently Used and the skin tone in its own defaults (`EmojiKeyboardView.usage`), which it can always write. Picks already in the app group (Full Access on) move over once.
+
+**Decision.** Frequently Used works like Apple's keyboard. The rule was read from Apple's EmojiFoundation (iOS 26.5 simulator) and checked against it:
+- Every pick gets the next number. A pick made n picks ago weighs 1 / (1 + 0.1 n), and an emoji's score is the sum of its picks. Before, each pick added 1 and every older score was multiplied by 0.97, so a favorite faded much faster: a pick 100 picks ago weighed 0.05 (Apple: 0.09), 300 ago 0.0001 (Apple: 0.03).
+- The list keeps its order. A picked emoji moves to where its new score fits. A new emoji comes in while there are fewer than 30, or when it beats the last one, which then leaves. Only the first 30 show.
+- Once there are 1,000 picks, only the last 500 are kept.
+- Until there are enough picks, the block is still filled with Vikey's starter emoji.
+The Mac panel shares the code, so it changes the same way. Android, Windows and Linux keep the old fading scores for now.
+
+**Locked by:** `EmojiUsageTests`:
+- `testSameListAsApple`, `testSameListAsAppleWithManyEmoji`, `testSameListAsAppleWhenFavoritesChange`, `testSameListAsAppleAfterThousandsOfPicks`: the same picks (700 to 2,500) give the same list as Apple's code, in the same order.
+- `testKeyboardSavesPicksInItsOwnDefaults`: a pick on the emoji keyboard is saved in the keyboard's own defaults, nothing goes to the app group, and the next keyboard shows it first.
+- `testOldScoresCarryOver`: the old scores carry over once, in the same order.
+
 ## 67. Each opening of the keyboard frees its views; the keyboard's memory is tested (iOS)
 
 **Status:** Agreed (built), 2026-11-18 (Tony: "vikey keyboard still crash, I see this just now"; "Pls add more tests to ensure vikey doesn't go pass 40MB mem usage ever").
