@@ -1062,7 +1062,7 @@ extension KeyboardViewController: EmojiKeyboardDelegate {
         // nothing typed yet: the frequently used ones, never an empty row (Tony)
         let byChar = { (c: String) in EmojiIndex.shared.emoji(c) }
         let found = emojiQuery.trimmingCharacters(in: .whitespaces).isEmpty
-            ? EmojiUsage.frequent(in: VKSettings.defaults, count: 24).compactMap(byChar)
+            ? EmojiUsage.frequent(in: EmojiKeyboardView.usage, count: 24).compactMap(byChar)
             : EmojiIndex.shared.search(emojiQuery, vietnamese: vi, limit: 80).filter { $0.version <= EmojiKeyboardView.maxVersion }
         ev.setQuery(shown, results: found)
     }
